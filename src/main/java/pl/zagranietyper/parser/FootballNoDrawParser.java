@@ -117,6 +117,9 @@ public final class FootballNoDrawParser {
     private static final Map<String, List<String>> TEAM_ALIASES =
             createAliases();
 
+    private static final FootballParticipantResolver PARTICIPANT_RESOLVER =
+            new FootballParticipantResolver();
+
     public ParseResult parse(
             String tipTitle,
             String homeTeam,
@@ -172,41 +175,35 @@ public final class FootballNoDrawParser {
             );
         }
 
-        boolean leftHome =
-                participantMatchesTeam(
+        FootballParticipantResolver.Resolution leftResolution =
+                PARTICIPANT_RESOLVER.resolve(
                         left,
-                        homeTeam
+                        homeTeam,
+                        awayTeam,
+                        FootballParticipantResolver.MatchingPolicy.SUBJECT_TOKENS_IN_TEAM,
+                        TEAM_ALIASES
                 );
 
-        boolean leftAway =
-                participantMatchesTeam(
-                        left,
-                        awayTeam
-                );
-
-        boolean rightHome =
-                participantMatchesTeam(
+        FootballParticipantResolver.Resolution rightResolution =
+                PARTICIPANT_RESOLVER.resolve(
                         right,
-                        homeTeam
-                );
-
-        boolean rightAway =
-                participantMatchesTeam(
-                        right,
-                        awayTeam
+                        homeTeam,
+                        awayTeam,
+                        FootballParticipantResolver.MatchingPolicy.SUBJECT_TOKENS_IN_TEAM,
+                        TEAM_ALIASES
                 );
 
         boolean normalOrder =
-                leftHome
-                        && rightAway;
+                leftResolution == FootballParticipantResolver.Resolution.HOME
+                        && rightResolution == FootballParticipantResolver.Resolution.AWAY;
 
         boolean reversedOrder =
-                leftAway
-                        && rightHome;
+                leftResolution == FootballParticipantResolver.Resolution.AWAY
+                        && rightResolution == FootballParticipantResolver.Resolution.HOME;
 
         if (
-                normalOrder
-                        && reversedOrder
+                leftResolution == FootballParticipantResolver.Resolution.AMBIGUOUS
+                        || rightResolution == FootballParticipantResolver.Resolution.AMBIGUOUS
         ) {
             return new ParseResult(
                     Status.PARTICIPANTS_AMBIGUOUS,

@@ -172,6 +172,9 @@ public final class FootballWinnerParser {
     private static final Map<String, List<String>> TEAM_ALIASES =
             createTeamAliases();
 
+    private static final FootballParticipantResolver PARTICIPANT_RESOLVER =
+            new FootballParticipantResolver();
+
     public ParseResult parse(
             String tipTitle,
             String homeTeam,
@@ -302,21 +305,17 @@ public final class FootballWinnerParser {
             );
         }
 
-        boolean home =
-                subjectMatchesTeam(
+        FootballParticipantResolver.Resolution resolution =
+                PARTICIPANT_RESOLVER.resolve(
                         subject,
-                        homeTeam
-                );
-
-        boolean away =
-                subjectMatchesTeam(
-                        subject,
-                        awayTeam
+                        homeTeam,
+                        awayTeam,
+                        FootballParticipantResolver.MatchingPolicy.EXACT_ORDERED,
+                        TEAM_ALIASES
                 );
 
         if (
-                home
-                        && !away
+                resolution == FootballParticipantResolver.Resolution.HOME
         ) {
             return parsed(
                     Selection.HOME,
@@ -325,8 +324,7 @@ public final class FootballWinnerParser {
         }
 
         if (
-                away
-                        && !home
+                resolution == FootballParticipantResolver.Resolution.AWAY
         ) {
             return parsed(
                     Selection.AWAY,
@@ -335,8 +333,7 @@ public final class FootballWinnerParser {
         }
 
         if (
-                home
-                        && away
+                resolution == FootballParticipantResolver.Resolution.AMBIGUOUS
         ) {
             return new ParseResult(
                     Status.SUBJECT_AMBIGUOUS,
