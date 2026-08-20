@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import pl.zagranietyper.config.ApiFootballConfig;
 import pl.zagranietyper.model.ApiFootballFixture;
+import pl.zagranietyper.model.ApiFootballFixtureStatisticsResponse;
 
 import java.io.IOException;
 import java.net.URI;
@@ -91,7 +92,7 @@ public final class ApiFootballClient {
         HttpResponse<String> response =
                 sendWithRetry(
                         request,
-                        date
+                        "fixtures date=" + date
                 );
 
         if (
@@ -136,9 +137,83 @@ public final class ApiFootballClient {
         );
     }
 
+    /** Fetches fixture statistics for exactly one fixture and never converts missing data to zero. */
+    public ApiFootballFixtureStatisticsResponse fetchFixtureStatistics(long fixtureId) {
+        if (fixtureId <= 0) throw new IllegalArgumentException("fixtureId must be positive");
+        URI uri = URI.create(config.baseUrl() + "/fixtures/statistics?fixture=" + fixtureId);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(uri)
+                .timeout(Duration.ofSeconds(60))
+                .header("x-apisports-key", config.apiKey())
+                .header("Accept", "application/json")
+                .header("User-Agent", "ZagranieTyper/0.1")
+                .GET().build();
+        Instant fetchedAt = Instant.now();
+        try {
+            HttpResponse<String> response = sendWithRetry(request, "fixture statistics=" + fixtureId);
+            if (response.statusCode() != 200) {
+                return new ApiFootballFixtureStatisticsResponse(
+                        fixtureId, ApiFootballFixtureStatisticsResponse.Status.FETCH_FAILED,
+                        response.statusCode(), "API-Football HTTP " + response.statusCode(),
+                        response.body(), fetchedAt, List.of());
+            }
+            return parseFixtureStatistics(response.body(), fixtureId, response.statusCode(), fetchedAt);
+        } catch (RuntimeException e) {
+            return new ApiFootballFixtureStatisticsResponse(
+                    fixtureId, ApiFootballFixtureStatisticsResponse.Status.FETCH_FAILED,
+                    null, e.getMessage(), null, fetchedAt, List.of());
+        }
+    }
+
+    ApiFootballFixtureStatisticsResponse parseFixtureStatistics(
+            String body, long fixtureId, Integer httpStatus, Instant fetchedAt) {
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            JsonNode errors = root.get("errors");
+            if (hasErrors(errors)) {
+                return new ApiFootballFixtureStatisticsResponse(
+                        fixtureId, ApiFootballFixtureStatisticsResponse.Status.API_ERROR,
+                        httpStatus, errors.toString(), body, fetchedAt, List.of());
+            }
+            JsonNode response = root.get("response");
+            if (response == null || !response.isArray() || response.isEmpty()) {
+                return new ApiFootballFixtureStatisticsResponse(
+                        fixtureId, ApiFootballFixtureStatisticsResponse.Status.EMPTY,
+                        httpStatus, null, body, fetchedAt, List.of());
+            }
+            List<ApiFootballFixtureStatisticsResponse.TeamStatistics> teams = new ArrayList<>();
+            for (JsonNode item : response) {
+                JsonNode team = item.path("team");
+                if (!team.path("id").canConvertToLong()) continue;
+                List<ApiFootballFixtureStatisticsResponse.RawStatistic> statistics = new ArrayList<>();
+                JsonNode values = item.path("statistics");
+                if (values.isArray()) {
+                    for (JsonNode statistic : values) {
+                        String label = text(statistic, "type");
+                        if (label != null) {
+                            statistics.add(new ApiFootballFixtureStatisticsResponse.RawStatistic(
+                                    label, statistic.get("value")));
+                        }
+                    }
+                }
+                teams.add(new ApiFootballFixtureStatisticsResponse.TeamStatistics(
+                        team.path("id").asLong(), text(team, "name"), statistics));
+            }
+            return new ApiFootballFixtureStatisticsResponse(
+                    fixtureId,
+                    teams.isEmpty() ? ApiFootballFixtureStatisticsResponse.Status.EMPTY
+                            : ApiFootballFixtureStatisticsResponse.Status.SUCCESS,
+                    httpStatus, null, body, fetchedAt, teams);
+        } catch (Exception e) {
+            return new ApiFootballFixtureStatisticsResponse(
+                    fixtureId, ApiFootballFixtureStatisticsResponse.Status.PARSE_ERROR,
+                    httpStatus, e.getMessage(), body, fetchedAt, List.of());
+        }
+    }
+
     private HttpResponse<String> sendWithRetry(
             HttpRequest request,
-            LocalDate date
+            String requestDescription
     ) {
         int attempt =
                 0;
@@ -173,7 +248,7 @@ public final class ApiFootballClient {
                     System.out.println(
                             "RATE LIMIT"
                                     + " date="
-                                    + date
+                                    + requestDescription
                                     + " attempt="
                                     + attempt
                                     + " sleepMs="
@@ -198,8 +273,8 @@ public final class ApiFootballClient {
                     System.out.println(
                             "API-Football "
                                     + status
-                                    + " date="
-                                    + date
+                                    + " request="
+                                    + requestDescription
                                     + " attempt="
                                     + attempt
                                     + " sleepMs="
@@ -223,7 +298,7 @@ public final class ApiFootballClient {
                 ) {
                     throw new IllegalStateException(
                             "Błąd połączenia z API-Football dla "
-                                    + date,
+                                    + requestDescription,
                             e
                     );
                 }
@@ -247,7 +322,7 @@ public final class ApiFootballClient {
 
         throw new IllegalStateException(
                 "Nie udało się pobrać API-Football dla "
-                        + date
+                        + requestDescription
         );
     }
 
