@@ -33,46 +33,62 @@ public final class FootballParticipantResolver {
             MatchingPolicy policy,
             Map<String, List<String>> aliases
     ) {
-        boolean home = matches(subject, homeTeam, policy, aliases);
-        boolean away = matches(subject, awayTeam, policy, aliases);
+        int homeScore = matchScore(subject, homeTeam, policy, aliases);
+        int awayScore = matchScore(subject, awayTeam, policy, aliases);
 
-        if (home && away) return Resolution.AMBIGUOUS;
-        if (home) return Resolution.HOME;
-        if (away) return Resolution.AWAY;
+        if (homeScore <= 0 && awayScore <= 0) return Resolution.UNRESOLVED;
+        if (homeScore == awayScore) return Resolution.AMBIGUOUS;
+        if (homeScore > awayScore) return Resolution.HOME;
+        if (awayScore > homeScore) return Resolution.AWAY;
         return Resolution.UNRESOLVED;
     }
 
-    private static boolean matches(
+    private static int matchScore(
             String subject,
             String apiTeam,
             MatchingPolicy policy,
             Map<String, List<String>> aliases
     ) {
         List<String> subjectTokens = meaningfulTokens(subject, policy);
-        if (subjectTokens.isEmpty()) return false;
+        String normalizedSubject = normalize(subject);
+        String normalizedTeam = normalize(apiTeam);
+        if (subjectTokens.isEmpty()) {
+            if (policy == MatchingPolicy.STRICT_SCORED_SUBSET
+                    && !normalizedSubject.isBlank()
+                    && !normalizedSubject.contains(" ")
+                    && List.of(normalizedTeam.split("\\s+")).contains(normalizedSubject)) {
+                return 5;
+            }
+            return 0;
+        }
+        if (policy == MatchingPolicy.STRICT_SCORED_SUBSET
+                && normalizedSubject.equals(normalizedTeam)) return 100;
+
+        int best = 0;
 
         for (String variant : teamVariants(apiTeam, aliases)) {
             List<String> teamTokens = meaningfulTokens(variant, policy);
             if (teamTokens.isEmpty()) continue;
 
-            boolean matched = switch (policy) {
+            int score = switch (policy) {
                 case EXACT_ORDERED -> exactOrdered(teamTokens, subjectTokens);
                 case SUBJECT_TOKENS_IN_TEAM -> subjectTokensInTeam(subjectTokens, teamTokens);
+                case STRICT_SCORED_SUBSET -> strictSubsetScore(subjectTokens, teamTokens);
             };
-            if (matched) return true;
+            best = Math.max(best, score);
         }
-        return false;
+        return best;
     }
 
-    private static boolean exactOrdered(List<String> team, List<String> subject) {
-        if (team.size() != subject.size()) return false;
+    private static int exactOrdered(List<String> team, List<String> subject) {
+        if (team.size() != subject.size()) return 0;
         for (int i = 0; i < team.size(); i++) {
-            if (!tokenEquivalent(team.get(i), subject.get(i))) return false;
+            if (!tokenEquivalent(team.get(i), subject.get(i))) return 0;
         }
-        return true;
+        return 1;
     }
 
-    private static boolean subjectTokensInTeam(List<String> subject, List<String> team) {
+    private static int subjectTokensInTeam(List<String> subject, List<String> team) {
         for (String subjectToken : subject) {
             boolean found = false;
             for (String teamToken : team) {
@@ -81,9 +97,27 @@ public final class FootballParticipantResolver {
                     break;
                 }
             }
-            if (!found) return false;
+            if (!found) return 0;
         }
-        return true;
+        return 1;
+    }
+
+    private static int strictSubsetScore(List<String> subject, List<String> team) {
+        boolean[] used = new boolean[team.size()];
+        int matches = 0;
+        for (String subjectToken : subject) {
+            boolean found = false;
+            for (int i = 0; i < team.size(); i++) {
+                if (!used[i] && broadTokenEquivalent(subjectToken, team.get(i))) {
+                    used[i] = true;
+                    matches++;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return 0;
+        }
+        return 10 + matches * 10;
     }
 
     private static boolean tokenEquivalent(String teamToken, String subjectToken) {
@@ -105,6 +139,41 @@ public final class FootballParticipantResolver {
         return false;
     }
 
+    private static boolean broadTokenEquivalent(String left, String right) {
+        if (left.equals(right)) return true;
+        if (left.length() < 4 || right.length() < 4) return false;
+        String localizedLeft = left.replace('y', 'i');
+        String localizedRight = right.replace('y', 'i');
+        if (localizedLeft.startsWith(localizedRight)
+                && localizedLeft.length() <= localizedRight.length() + 7) return true;
+        if (localizedRight.startsWith(localizedLeft)
+                && localizedRight.length() <= localizedLeft.length() + 7) return true;
+        if (localizedLeft.length() == localizedRight.length()
+                && localizedLeft.substring(0, localizedLeft.length() - 1)
+                .equals(localizedRight.substring(0, localizedRight.length() - 1))
+                && ((localizedLeft.endsWith("t") && localizedRight.endsWith("d"))
+                || (localizedLeft.endsWith("d") && localizedRight.endsWith("t")))) return true;
+        if (left.startsWith(right) && left.length() <= right.length() + 7) return true;
+        if (right.startsWith(left) && right.length() <= left.length() + 7) return true;
+        return sameStemWithoutFinalA(left, right)
+                || sameStemWithoutFinalA(right, left)
+                || samePolishInflectionStem(left, right);
+    }
+
+    private static boolean sameStemWithoutFinalA(String base, String inflected) {
+        if (!base.endsWith("a") || base.length() < 5) return false;
+        String stem = base.substring(0, base.length() - 1);
+        return inflected.startsWith(stem) && inflected.length() <= base.length() + 6;
+    }
+
+    private static boolean samePolishInflectionStem(String left, String right) {
+        String normalizedLeft = left.replace("gn", "ni");
+        String normalizedRight = right.replace("gn", "ni");
+        if (normalizedLeft.length() < 5 || normalizedRight.length() < 5) return false;
+        return normalizedLeft.substring(0, normalizedLeft.length() - 1)
+                .equals(normalizedRight.substring(0, normalizedRight.length() - 1));
+    }
+
     private static List<String> teamVariants(
             String apiTeam,
             Map<String, List<String>> aliases
@@ -122,6 +191,8 @@ public final class FootballParticipantResolver {
         List<String> result = new ArrayList<>();
         for (String token : tokens(value)) {
             if (COMMON_TEAM_NOISE.contains(token)) continue;
+            if (policy == MatchingPolicy.STRICT_SCORED_SUBSET
+                    && Set.of("gks", "united", "city").contains(token)) continue;
             if (policy == MatchingPolicy.SUBJECT_TOKENS_IN_TEAM
                     && (token.length() == 1 || token.equals("town"))) continue;
             if (token.chars().allMatch(Character::isDigit)) continue;
@@ -149,5 +220,5 @@ public final class FootballParticipantResolver {
 
     public enum Resolution { HOME, AWAY, UNRESOLVED, AMBIGUOUS }
 
-    public enum MatchingPolicy { EXACT_ORDERED, SUBJECT_TOKENS_IN_TEAM }
+    public enum MatchingPolicy { EXACT_ORDERED, SUBJECT_TOKENS_IN_TEAM, STRICT_SCORED_SUBSET }
 }

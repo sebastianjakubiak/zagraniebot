@@ -27,7 +27,7 @@ public final class FootballTeamMarketParser {
                     "^(.+?)\\s+"
                             + "(powyzej|ponizej|over|under)\\s+"
                             + "([0-9]+(?:[.,][0-9]+)?)\\s*"
-                            + "(?:gola|goli|gol|bramki|bramek|bramka)?$"
+                            + "(?:gola|gole|goli|gol|bramki|bramek|bramka)?$"
             );
 
     /*
@@ -40,7 +40,7 @@ public final class FootballTeamMarketParser {
                             + "(?:strzeli|zdobedzie)\\s+"
                             + "(wiecej\\s+niz|mniej\\s+niz|powyzej|ponizej|over|under)\\s+"
                             + "([0-9]+(?:[.,][0-9]+)?)\\s*"
-                            + "(?:gola|goli|gol|bramki|bramek|bramka)?$"
+                            + "(?:gola|gole|goli|gol|bramki|bramek|bramka)?$"
             );
 
     /*
@@ -182,6 +182,9 @@ public final class FootballTeamMarketParser {
 
     private static final Map<String, List<String>> TEAM_ALIASES =
             createTeamAliases();
+
+    private static final FootballParticipantResolver PARTICIPANT_RESOLVER =
+            new FootballParticipantResolver();
 
     public Optional<FootballTeamMarket> parse(
             String tipTitle,
@@ -543,43 +546,28 @@ public final class FootballTeamMarketParser {
             return Optional.empty();
         }
 
-        int homeScore =
-                strictTeamMatchScore(
-                        subject,
-                        normalize(
-                                homeTeam
-                        )
-                );
+        return switch (resolveParticipant(subject, homeTeam, awayTeam)) {
+            case HOME -> Optional.of(FootballTeamMarket.TeamSide.HOME);
+            case AWAY -> Optional.of(FootballTeamMarket.TeamSide.AWAY);
+            case UNRESOLVED, AMBIGUOUS -> Optional.empty();
+        };
+    }
 
-        int awayScore =
-                strictTeamMatchScore(
-                        subject,
-                        normalize(
-                                awayTeam
-                        )
-                );
-
-        if (
-                homeScore <= 0
-                        && awayScore <= 0
-        ) {
-            return Optional.empty();
+    static FootballParticipantResolver.Resolution resolveParticipant(
+            String rawSubject,
+            String homeTeam,
+            String awayTeam
+    ) {
+        String subject = normalizeSubject(rawSubject);
+        if (subject.isBlank()) {
+            return FootballParticipantResolver.Resolution.UNRESOLVED;
         }
-
-        /*
-         * Jeśli obie drużyny pasują równie dobrze,
-         * nie zgadujemy.
-         */
-        if (
-                homeScore == awayScore
-        ) {
-            return Optional.empty();
-        }
-
-        return Optional.of(
-                homeScore > awayScore
-                        ? FootballTeamMarket.TeamSide.HOME
-                        : FootballTeamMarket.TeamSide.AWAY
+        return PARTICIPANT_RESOLVER.resolve(
+                subject,
+                homeTeam,
+                awayTeam,
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET,
+                TEAM_ALIASES
         );
     }
 
