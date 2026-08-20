@@ -1,0 +1,13 @@
+# PostgreSQL
+DB_URL=jdbc:postgresql://localhost:5432/zagranie_typer
+DB_USER=postgres
+DB_PASSWORD=postgres
+
+# Zagranie / WordPress
+ZAGRANIE_BASE_URL=https://zagranie.com
+ZAGRANIE_WP_POSTS_PATH=/wp-json/wp/v2/posts
+
+# Importer
+HTTP_DELAY_MS=300
+HTTP_MAX_RETRIES=5
+HTTP_TIMEOUT_SECONDS=30
