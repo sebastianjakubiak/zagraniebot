@@ -23,6 +23,11 @@ public final class FootballDeterministicGoalSyntaxAdapter {
     private static final Pattern EITHER=Pattern.compile("^(?:gol|bramka)\\s+(.+?)\\s+lub\\s+(.+)$");
     private static final Pattern BTTS=Pattern.compile("^(?:btts|oba zespoly strzela (?:gola|gole)|obie druzyny strzela (?:gola|gole)|gole obu ekip|gole z obu stron|bramki z obu stron)(?::?\\s*(tak|nie))?$");
     private static final Pattern BTTS_NO=Pattern.compile("^(?:obie druzyny|oba zespoly) nie strzela (?:gola|goli)$");
+    private static final Pattern VARIANT_OVER_HALF_TYPO=Pattern.compile("^(.+?)\\s+powyzej\\s+0[.,]5\\s+gols$");
+    private static final Pattern VARIANT_GOAL_TYPO=Pattern.compile("^(.+?)\\s+strzeli\\s+gla$");
+    private static final Pattern VARIANT_PLURAL=Pattern.compile("^(.+?)\\s+strzela\\s+gola$");
+    private static final Pattern VARIANT_MINIMUM_ONE=Pattern.compile("^(.+?)\\s+strzeli\\s+przynajmniej\\s+jednego\\s+gola$");
+    private static final Pattern VARIANT_EXPLICIT_NO=Pattern.compile("^(.+?)\\s+strzeli\\s+gola\\s*-\\s*nie$");
     private static final Pattern GOALISH=Pattern.compile("\\b(gol|gole|gola|goli|bramka|bramke|bramki|bramek|strzeli|zdobedzie|btts)\\b");
     private static final Pattern UNSAFE=Pattern.compile("\\b(polow|minucie|zawodnik|wygra|awans|kart|rzutow rozn|strzal|asyst|handicap)\\b");
 
@@ -32,6 +37,8 @@ public final class FootballDeterministicGoalSyntaxAdapter {
         if(!GOALISH.matcher(t).find())return reject(Status.NOT_GOAL_LIKE);
         if(!Character.isLetterOrDigit(title.stripLeading().codePointAt(0)))return reject(Status.UNSUPPORTED);
         if(UNSAFE.matcher(t).find()||t.contains(" i ")||t.contains(" / "))return reject(Status.UNSUPPORTED);
+        ParseResult variant=parseVariantNormalized(t,home,away);
+        if(variant.status()!=Status.NOT_GOAL_LIKE)return variant;
         Matcher m;
         if((m=SIGNED.matcher(t)).matches()){BigDecimal line=new BigDecimal(m.group(2)+".5");return team(Family.SIGNED_TEAM_GOALS,m.group(1),home,away,s->new UnifiedFootballMarket.TotalGoals(s,FootballScorePeriod.FULL_TIME,UnifiedFootballMarket.TotalDirection.OVER,line));}
         if((m=MIN_AFTER.matcher(t)).matches()){int n=Integer.parseInt(m.group(2));return team(Family.TEAM_MINIMUM,m.group(1),home,away,s->new UnifiedFootballMarket.MinimumGoals(s,FootballScorePeriod.FULL_TIME,n));}
@@ -48,6 +55,18 @@ public final class FootballDeterministicGoalSyntaxAdapter {
         }
         if((m=GOAL_TEAM.matcher(t)).matches())return team(Family.TEAM_TO_SCORE,m.group(1),home,away,s->new UnifiedFootballMarket.TeamToScore(s,FootballScorePeriod.FULL_TIME,true));
         return reject(Status.UNSUPPORTED);
+    }
+
+    /** Only the separately audited TEAM_TO_SCORE wording variants. */
+    public ParseResult parseVariant(String title,String home,String away){
+        if(title==null||title.isBlank())return reject(Status.NOT_GOAL_LIKE);
+        return parseVariantNormalized(normalize(title),home,away);
+    }
+    private static ParseResult parseVariantNormalized(String text,String home,String away){
+        Matcher m;
+        if((m=VARIANT_OVER_HALF_TYPO.matcher(text)).matches()||(m=VARIANT_GOAL_TYPO.matcher(text)).matches()||(m=VARIANT_PLURAL.matcher(text)).matches()||(m=VARIANT_MINIMUM_ONE.matcher(text)).matches())return team(Family.TEAM_TO_SCORE,m.group(1),home,away,s->new UnifiedFootballMarket.TeamToScore(s,FootballScorePeriod.FULL_TIME,true));
+        if((m=VARIANT_EXPLICIT_NO.matcher(text)).matches())return team(Family.TEAM_NOT_TO_SCORE,m.group(1),home,away,s->new UnifiedFootballMarket.TeamToScore(s,FootballScorePeriod.FULL_TIME,false));
+        return reject(Status.NOT_GOAL_LIKE);
     }
 
     private static ParseResult team(Family f,String raw,String home,String away,java.util.function.Function<UnifiedFootballMarket.GoalSubject,UnifiedFootballMarket.Condition> make){var side=resolve(raw,home,away);return side==null?reject(Status.PARTICIPANT_UNRESOLVED):parsed(f,side,make.apply(side));}

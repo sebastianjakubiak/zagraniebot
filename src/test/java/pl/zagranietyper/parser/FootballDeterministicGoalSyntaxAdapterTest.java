@@ -31,4 +31,21 @@ class FootballDeterministicGoalSyntaxAdapterTest {
         assertFalse(parser.parse("Manchester City +1.5 goli i +4.5 rzutów rożnych","Manchester City","Arsenal").parsed());
         assertFalse(parser.parse("✅Everton +0.5 goli","Everton","Liverpool").parsed());
     }
+    @Test void supportsOnlyAuditedTeamToScoreWordingVariants(){
+        assertTrue(parser.parseVariant("Betis powyżej 0.5 gols","Real Sociedad","Real Betis").parsed());
+        assertTrue(parser.parseVariant("Torino strzeli gla","Udinese","Torino").parsed());
+        assertTrue(parser.parseVariant("Wolves strzelą gola","Wolves","Newcastle").parsed());
+        assertTrue(parser.parseVariant("Nottingham strzeli przynajmniej jednego gola","Nottingham Forest","Arsenal").parsed());
+        var no=parser.parseVariant("Dagenham & Red strzeli gola - NIE","Millwall","Dagenham & Redbridge");
+        assertFalse(no.parsed());
+        var exactNo=parser.parseVariant("Dagenham & Redbridge strzeli gola - NIE","Millwall","Dagenham & Redbridge");
+        assertTrue(exactNo.parsed());assertFalse(((UnifiedFootballMarket.TeamToScore)exactNo.market().conditions().getFirst()).expected());
+    }
+    @Test void variantBoundaryRejectsUnsafeSubjectsAndPartialTitles(){
+        assertFalse(parser.parseVariant("Kolumbia strzelą gola","Colombia","Brazil").parsed());
+        assertFalse(parser.parseVariant("Lewandowski strzeli gla","Barcelona","Real Madrid").parsed());
+        assertFalse(parser.parseVariant("Roma strzelą gola w 1. połowie","Roma","Milan").parsed());
+        assertFalse(parser.parseVariant("Gospodarze strzelą gola","Roma","Milan").parsed());
+        assertFalse(parser.parseVariant("Roma strzelą gola i wygra","Roma","Milan").parsed());
+    }
 }
