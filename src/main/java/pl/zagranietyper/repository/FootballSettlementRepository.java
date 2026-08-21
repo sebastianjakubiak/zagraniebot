@@ -150,6 +150,20 @@ public final class FootballSettlementRepository {
     public ApplyResult apply(
             List<SettlementUpdate> updates
     ) {
+        return apply(updates, false);
+    }
+
+    /** Applies one reviewed batch atomically; any concurrently changed leg rolls back the whole batch. */
+    public ApplyResult applyExact(
+            List<SettlementUpdate> updates
+    ) {
+        return apply(updates, true);
+    }
+
+    private ApplyResult apply(
+            List<SettlementUpdate> updates,
+            boolean requireEveryLeg
+    ) {
         if (
                 updates == null
                         || updates.isEmpty()
@@ -171,6 +185,16 @@ public final class FootballSettlementRepository {
                                 connection,
                                 updates
                         );
+
+                if (requireEveryLeg
+                        && (legResult.skippedLegs() != 0
+                        || legResult.updatedLegs() != updates.size())) {
+                    throw new IllegalStateException(
+                            "Exact settlement batch changed concurrently: expected=" + updates.size()
+                                    + ", updated=" + legResult.updatedLegs()
+                                    + ", skipped=" + legResult.skippedLegs()
+                    );
+                }
 
                 BetApplyResult betResult =
                         aggregateAffectedBets(
