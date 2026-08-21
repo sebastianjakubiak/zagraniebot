@@ -10,8 +10,6 @@ import pl.zagranietyper.repository.FootballSettlementRepository;
 import pl.zagranietyper.service.FootballFixtureStatisticSettlementEngine;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
 
 /** Read-only global coverage and exact-snapshot report for full-time fouls markets. */
@@ -19,9 +17,7 @@ public final class FootballFoulsCoverageDryRunMain {
     private FootballFoulsCoverageDryRunMain() {}
 
     public static void main(String[] args) {
-        if (args != null && args.length != 0) {
-            throw new IllegalArgumentException("Usage: FootballFoulsCoverageDryRunMain");
-        }
+        boolean apply = parseApplyFlag(args);
         var database = new Database(AppConfig.fromEnvironment());
         var candidates = new FootballSettlementRepository(database).findPendingApiFootballCandidates();
         var statistics = new FootballFixtureStatisticsRepository(database, new ObjectMapper());
@@ -31,14 +27,14 @@ public final class FootballFoulsCoverageDryRunMain {
                 new EnumMap<>(FootballFoulsSyntaxAdapter.Category.class);
         EnumMap<Reason, Integer> reasons = new EnumMap<>(Reason.class);
         for (Reason reason : Reason.values()) reasons.put(reason, 0);
-        List<SnapshotLine> snapshotLines = new ArrayList<>();
+        List<FootballFoulsReviewedSnapshot.Candidate> reviewedCandidates = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
         int totalEligible=0, foulsLike=0, fullTimeFoulsLike=0, rawDataAvailableFullTime=0;
         int wins=0, losses=0, voids=0;
 
         System.out.println("Zagranie Typer — GLOBAL FOULS COVERAGE");
-        System.out.println("MODE=DRY_RUN");
-        System.out.println("NO SETTLEMENT WRITES");
+        System.out.println("MODE="+(apply?"APPLY":"DRY_RUN"));
+        if (!apply) System.out.println("NO SETTLEMENT WRITES");
         System.out.println("PARSED RECORDS");
         for (var candidate : candidates) {
             if (!eligible(candidate.statusShort())) continue;
@@ -80,7 +76,8 @@ public final class FootballFoulsCoverageDryRunMain {
             if (!seen.add(candidate.legId())) throw new IllegalStateException("Duplicate parsed leg: " + candidate.legId());
             categories.merge(parsed.category(), 1, Integer::sum);
             if (decision == SettlementDecision.W) wins++; else if (decision == SettlementDecision.L) losses++; else voids++;
-            snapshotLines.add(new SnapshotLine(candidate.legId(), parsed.condition(), decision));
+            reviewedCandidates.add(new FootballFoulsReviewedSnapshot.Candidate(
+                    candidate.legId(), candidate.betId(), parsed.condition(), decision, true));
             System.out.printf("leg_id=%d fixture=%d FOULS_HOME=%s FOULS_AWAY=%s tip_title=%s resolvedSubject=%s parsedCondition=%s decision=%s%n",
                     candidate.legId(), candidate.fixtureId(), value(snapshot.get(), FootballFixtureStatisticsSnapshot.TeamSide.HOME),
                     value(snapshot.get(), FootballFixtureStatisticsSnapshot.TeamSide.AWAY), candidate.tipTitle(),
@@ -101,13 +98,68 @@ public final class FootballFoulsCoverageDryRunMain {
             System.out.println("parsed."+category+"="+categories.getOrDefault(category,0));
         }
         System.out.println("SNAPSHOT");
-        snapshotLines.stream().sorted(Comparator.comparingLong(SnapshotLine::legId))
-                .map(FootballFoulsCoverageDryRunMain::canonical).forEach(System.out::println);
-        System.out.println("snapshotCount="+snapshotLines.size());
-        System.out.println("snapshotSHA256="+sha256(snapshotLines));
-        System.out.println("duplicateLegs="+(snapshotLines.size()-seen.size()));
-        System.out.println("secondarySafetyGate="+(foulsLike==parsed+rejected && snapshotLines.size()==seen.size() ? "PASS" : "FAIL"));
+        reviewedCandidates.stream().sorted(Comparator.comparingLong(FootballFoulsReviewedSnapshot.Candidate::legId))
+                .map(FootballFoulsReviewedSnapshot::canonicalLine).forEach(System.out::println);
+        System.out.println("snapshotCount="+reviewedCandidates.size());
+        System.out.println("snapshotSHA256="+FootballFoulsReviewedSnapshot.hashCandidates(reviewedCandidates));
+        System.out.println("duplicateLegs="+(reviewedCandidates.size()-seen.size()));
         if (foulsLike != parsed+rejected) throw new IllegalStateException("Fouls coverage counts do not reconcile");
+        var gate=FootballFoulsReviewedSnapshot.verify(reviewedCandidates);
+        printApplyGate(gate);
+        applyIfRequested(apply,gate,reviewedCandidates,updates->
+                new FootballSettlementRepository(database).applyExact(updates));
+    }
+
+    static boolean parseApplyFlag(String[] args) {
+        if (args==null||args.length==0) return false;
+        if (args.length==1&&"--apply".equals(args[0])) return true;
+        throw new IllegalArgumentException("Usage: FootballFoulsCoverageDryRunMain [--apply]");
+    }
+
+    static FootballSettlementRepository.ApplyResult applyIfRequested(
+            boolean apply, FootballFoulsReviewedSnapshot.GateResult gate,
+            List<FootballFoulsReviewedSnapshot.Candidate> candidates, ApplyExecutor executor) {
+        if (!apply) return null;
+        if (!gate.applyReady()) throw new IllegalStateException("REFUSING APPLY: exact reviewed FOULS snapshot gate failed");
+        var updates=candidates.stream().map(candidate->new FootballSettlementRepository.SettlementUpdate(
+                candidate.legId(),candidate.betId(),candidate.decision())).toList();
+        var result=executor.apply(updates);
+        if (result.updatedLegs()!=FootballFoulsReviewedSnapshot.EXPECTED_COUNT||result.skippedLegs()!=0
+                ||result.winLegs()!=FootballFoulsReviewedSnapshot.EXPECTED_W
+                ||result.lossLegs()!=FootballFoulsReviewedSnapshot.EXPECTED_L
+                ||result.voidLegs()!=FootballFoulsReviewedSnapshot.EXPECTED_V) {
+            throw new IllegalStateException("FOULS exact apply result mismatch: "+result);
+        }
+        printApplyResult(result);
+        return result;
+    }
+
+    private static void printApplyGate(FootballFoulsReviewedSnapshot.GateResult gate) {
+        System.out.println("PRE-APPLY SNAPSHOT GATES");
+        System.out.println("candidateCount="+gate.actualCount());
+        System.out.println("candidateW="+gate.wins()); System.out.println("candidateL="+gate.losses()); System.out.println("candidateV="+gate.voids());
+        System.out.println("expectedCount="+FootballFoulsReviewedSnapshot.EXPECTED_COUNT);
+        System.out.println("actualCount="+gate.actualCount()); System.out.println("COUNT_GATE="+pass(gate.countGate()));
+        System.out.println("expectedSHA256="+FootballFoulsReviewedSnapshot.EXPECTED_SHA256);
+        System.out.println("actualSHA256="+gate.actualSha256()); System.out.println("HASH_GATE="+pass(gate.hashGate()));
+        System.out.println("approvedLegIdsCount="+FootballFoulsReviewedSnapshot.APPROVED_LEG_IDS.size());
+        System.out.println("actualLegIdsCount="+gate.actualLegIds().size()); System.out.println("LEG_SET_GATE="+pass(gate.legSetGate()));
+        System.out.println("missingApprovedIds="+new TreeSet<>(gate.missingApprovedIds()));
+        System.out.println("unexpectedIds="+new TreeSet<>(gate.unexpectedIds()));
+        System.out.println("secondarySafetyGate="+pass(gate.secondarySafetyGate()));
+        System.out.println("APPLY_READY="+gate.applyReady());
+    }
+    private static void printApplyResult(FootballSettlementRepository.ApplyResult result) {
+        System.out.println("APPLY RESULT");
+        System.out.println("updatedLegs="+result.updatedLegs()); System.out.println("skippedLegs="+result.skippedLegs());
+        System.out.println("W="+result.winLegs()); System.out.println("L="+result.lossLegs()); System.out.println("V="+result.voidLegs());
+        System.out.println("updatedBets="+result.updatedBets()); System.out.println("betW="+result.winBets());
+        System.out.println("betL="+result.lossBets()); System.out.println("betV="+result.voidBets());
+        System.out.println("pendingBets="+result.pendingBets()); System.out.println("multiUnverifiedBets="+result.multiUnverifiedBets());
+    }
+    private static String pass(boolean value){return value?"PASS":"FAIL";}
+    @FunctionalInterface interface ApplyExecutor {
+        FootballSettlementRepository.ApplyResult apply(List<FootballSettlementRepository.SettlementUpdate> updates);
     }
 
     private static void reject(Reason reason, FootballSettlementRepository.Candidate candidate) {
@@ -138,16 +190,6 @@ public final class FootballFoulsCoverageDryRunMain {
             case PARSED, NOT_FOULS_LIKE -> throw new IllegalArgumentException("Not a rejection: "+status);
         };
     }
-    private static String canonical(SnapshotLine line) {
-        var c=line.condition();
-        return line.legId()+"|type=FOULS|subject="+c.subject()+"|comparison="+c.comparison()+"|threshold="+plain(c.threshold())+"|rangeMaximum="+plain(c.rangeMaximum())+"|decision="+line.decision();
-    }
-    private static String sha256(List<SnapshotLine> lines) {
-        try { var digest=MessageDigest.getInstance("SHA-256");
-            String payload=lines.stream().sorted(Comparator.comparingLong(SnapshotLine::legId)).map(FootballFoulsCoverageDryRunMain::canonical).reduce("",(a,b)->a+b+"\n");
-            return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch(Exception e) { throw new IllegalStateException(e); }
-    }
     private static String plain(BigDecimal value) { return value==null?"null":value.stripTrailingZeros().toPlainString(); }
     private enum Reason {
         MISSING_SNAPSHOT("missingSnapshot"), UNSUPPORTED_FIXTURE("unsupportedFixture"), ABSENT_STATISTIC("absentStatistic"),
@@ -156,5 +198,4 @@ public final class FootballFoulsCoverageDryRunMain {
         UNSUPPORTED_SIGNED_NOTATION("unsupportedSignedNotation"), UNSUPPORTED_GRAMMAR("unsupportedGrammar");
         final String label; Reason(String label){this.label=label;}
     }
-    private record SnapshotLine(long legId, FootballFixtureStatisticCondition condition, SettlementDecision decision) {}
 }
