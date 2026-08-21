@@ -16,7 +16,7 @@ public final class FootballCompositeCoverageDryRunMain {
     private FootballCompositeCoverageDryRunMain() {}
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 0) throw new IllegalArgumentException("DRY_RUN only; no arguments accepted");
+        boolean apply=parseApply(args);
         var database = new Database(AppConfig.fromEnvironment());
         var repository = new FootballSettlementRepository(database);
         var statisticsRepository = new FootballFixtureStatisticsRepository(database, new ObjectMapper());
@@ -53,7 +53,7 @@ public final class FootballCompositeCoverageDryRunMain {
             String combination=combination(parsed.condition()); combinations.merge(combination,1,Integer::sum);
             examples.computeIfAbsent(combination,k->new ArrayList<>());
             if(examples.get(combination).size()<2)examples.get(combination).add(candidate.tipTitle());
-            SnapshotRow row=new SnapshotRow(candidate.legId(),parsed.normalizedBranches(),parsed.condition(),result.branchDecisions(),result.decision());
+            SnapshotRow row=new SnapshotRow(candidate.legId(),candidate.betId(),parsed.normalizedBranches(),parsed.condition(),result.branchDecisions(),result.decision());
             snapshot.add(row);
             System.out.println("PARSED leg_id="+candidate.legId()+" title="+candidate.tipTitle()+" branches="+parsed.normalizedBranches()+" branchDecisions="+result.branchDecisions()+" decision="+result.decision());
         }
@@ -69,12 +69,25 @@ public final class FootballCompositeCoverageDryRunMain {
         List<SnapshotRow> sorted=snapshot.stream().sorted(Comparator.comparingLong(SnapshotRow::legId)).toList();
         System.out.println("snapshotCount="+sorted.size());System.out.println("snapshotW="+decisions.getOrDefault(SettlementDecision.W,0));System.out.println("snapshotL="+decisions.getOrDefault(SettlementDecision.L,0));System.out.println("snapshotV="+decisions.getOrDefault(SettlementDecision.V,0));
         System.out.println("sortedLegIds="+sorted.stream().map(SnapshotRow::legId).toList());System.out.println("snapshotSHA256="+sha256(sorted));
+        var gate=FootballCompositeReviewedSnapshot.verify(sorted);printGate(gate);
+        applyIfRequested(apply,gate,sorted,updates->repository.applyExact(updates));
     }
+
+    static boolean parseApply(String[] args){if(args==null||args.length==0)return false;if(args.length==1&&"--apply".equals(args[0]))return true;throw new IllegalArgumentException("Usage: FootballCompositeCoverageDryRunMain [--apply]");}
+    static FootballSettlementRepository.ApplyResult applyIfRequested(boolean apply,FootballCompositeReviewedSnapshot.Gate gate,List<SnapshotRow> rows,ApplyExecutor executor){
+        if(!apply)return null;if(!gate.ready())throw new IllegalStateException("REFUSING APPLY: exact reviewed composite snapshot gate failed");
+        var updates=rows.stream().map(r->new FootballSettlementRepository.SettlementUpdate(r.legId(),r.betId(),r.decision())).toList();
+        var result=executor.apply(updates);if(result.updatedLegs()!=29||result.skippedLegs()!=0||result.winLegs()!=13||result.lossLegs()!=16||result.voidLegs()!=0)throw new IllegalStateException("Composite exact apply mismatch: "+result);
+        System.out.println("APPLY_RESULT updated="+result.updatedLegs()+" skipped="+result.skippedLegs()+" W="+result.winLegs()+" L="+result.lossLegs()+" V="+result.voidLegs()+" affectedBets="+result.updatedBets());return result;
+    }
+    private static void printGate(FootballCompositeReviewedSnapshot.Gate g){System.out.println("PRE_WRITE_GATE count="+g.count()+" W="+g.w()+" L="+g.l()+" V="+g.v()+" SHA256="+g.sha256());System.out.println("missingApprovedIds="+new TreeSet<>(g.missing()));System.out.println("unexpectedIds="+new TreeSet<>(g.unexpected()));System.out.println("COUNT_GATE="+pass(g.countGate())+" HASH_GATE="+pass(g.hashGate())+" LEG_SET_GATE="+pass(g.legSetGate())+" SAFETY_GATE="+pass(g.safetyGate())+" APPLY_READY="+g.ready());}
+    private static String pass(boolean b){return b?"PASS":"FAIL";}
+    @FunctionalInterface interface ApplyExecutor{FootballSettlementRepository.ApplyResult apply(List<FootballSettlementRepository.SettlementUpdate> updates);}
 
     static String canonical(SnapshotRow row) { return row.legId()+"|branches="+String.join(" && ",row.normalizedBranches())+"|conditions="+row.condition().branches()+"|decision="+row.decision(); }
     static String sha256(List<SnapshotRow> rows) throws Exception { String payload=rows.stream().map(FootballCompositeCoverageDryRunMain::canonical).reduce("",(a,b)->a+b+"\n");return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload.getBytes(StandardCharsets.UTF_8))); }
     private static String combination(FootballCompositeCondition condition){return condition.branches().stream().map(b->b instanceof FootballCompositeCondition.ScoreBranch?"SCORE":((FootballCompositeCondition.StatisticBranch)b).condition().type().name()).toList().toString();}
     private static Reason reason(FootballCompositeSyntaxAdapter.Status status){return switch(status){case UNSUPPORTED_BRANCH->Reason.UNSUPPORTED_BRANCH;case AMBIGUOUS_GRAMMAR->Reason.AMBIGUOUS_GRAMMAR;case PARTICIPANT_UNRESOLVED->Reason.PARTICIPANT_UNRESOLVED;case PLAYER_BRANCH->Reason.PLAYER_BRANCH;case PERIOD_BRANCH->Reason.PERIOD_BRANCH;case CARD_SEMANTIC_UNKNOWN->Reason.CARD_SEMANTIC_UNKNOWN;case COMPARISON_OR_HANDICAP->Reason.COMPARISON_OR_HANDICAP;case PARSED,NOT_COMPOSITE->Reason.OTHER;};}
     enum Reason {UNSUPPORTED_BRANCH("unsupportedBranch"),AMBIGUOUS_GRAMMAR("ambiguousGrammar"),PARTICIPANT_UNRESOLVED("participantUnresolved"),MISSING_RAW_DATA("missingRawData"),PLAYER_BRANCH("playerBranch"),PERIOD_BRANCH("periodBranch"),CARD_SEMANTIC_UNKNOWN("cardSemanticUnknown"),COMPARISON_OR_HANDICAP("comparisonOrHandicap"),OTHER("other");final String label;Reason(String label){this.label=label;}}
-    record SnapshotRow(long legId,List<String> normalizedBranches,FootballCompositeCondition condition,List<SettlementDecision> branchDecisions,SettlementDecision decision){}
+    record SnapshotRow(long legId,long betId,List<String> normalizedBranches,FootballCompositeCondition condition,List<SettlementDecision> branchDecisions,SettlementDecision decision){}
 }
