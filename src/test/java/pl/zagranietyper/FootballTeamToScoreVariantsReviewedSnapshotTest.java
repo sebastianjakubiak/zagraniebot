@@ -1,0 +1,8 @@
+package pl.zagranietyper;
+import org.junit.jupiter.api.Test;import pl.zagranietyper.repository.FootballSettlementRepository;import java.util.*;import java.util.concurrent.atomic.AtomicInteger;import static org.junit.jupiter.api.Assertions.*;
+final class FootballTeamToScoreVariantsReviewedSnapshotTest {
+ @Test void immutableBoundaryIsExact(){assertEquals(Set.of(3242L,7640L,9342L,17160L),FootballTeamToScoreVariantsReviewedSnapshot.APPROVED_IDS);assertEquals(4,FootballTeamToScoreVariantsReviewedSnapshot.EXPECTED_COUNT);}
+ @Test void dryRunAndFailedGateNeverWrite(){AtomicInteger calls=new AtomicInteger();assertFalse(FootballTeamToScoreVariantsCoverageDryRunMain.parseApply(new String[0]));assertNull(FootballTeamToScoreVariantsCoverageDryRunMain.applyIfRequested(false,gate(true),List.of(),u->{calls.incrementAndGet();return success();}));assertThrows(IllegalStateException.class,()->FootballTeamToScoreVariantsCoverageDryRunMain.applyIfRequested(true,gate(false),List.of(),u->{calls.incrementAndGet();return success();}));assertEquals(0,calls.get());}
+ @Test void successfulGateDelegatesToExactApply(){AtomicInteger calls=new AtomicInteger();assertEquals(4,FootballTeamToScoreVariantsCoverageDryRunMain.applyIfRequested(true,gate(true),List.of(),u->{calls.incrementAndGet();return success();}).updatedLegs());assertEquals(1,calls.get());}
+ private static FootballTeamToScoreVariantsReviewedSnapshot.Gate gate(boolean p){return new FootballTeamToScoreVariantsReviewedSnapshot.Gate(4,1,3,0,"hash",Set.of(),Set.of(),p,p,p,p);}private static FootballSettlementRepository.ApplyResult success(){return new FootballSettlementRepository.ApplyResult(4,0,1,3,0,4,1,3,0,0,0);}
+}
