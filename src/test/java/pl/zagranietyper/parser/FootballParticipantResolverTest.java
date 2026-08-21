@@ -68,6 +68,113 @@ final class FootballParticipantResolverTest {
                 "Brazil",
                 FootballParticipantResolver.MatchingPolicy.EXACT_ORDERED
         );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Portugalia",
+                "Portugal",
+                "Croatia",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Czechy",
+                "Czechia",
+                "Slovakia",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Belgia",
+                "Belgium",
+                "Ukraine",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Dania",
+                "Denmark",
+                "Sweden",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Kolumbia",
+                "Colombia",
+                "Brazil",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+    }
+
+    @Test
+    void resolvesOnlyApprovedExactDirectionalAliases() {
+        assertResolution(FootballParticipantResolver.Resolution.AWAY,
+                "Argentyna", "Uruguay", "Argentina",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.HOME,
+                "Argentyna", "Argentina", "Uruguay",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.AWAY,
+                "Brazylia", "Argentina", "Brazil",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.HOME,
+                "Brazylia", "Brazil", "Argentina",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.AWAY,
+                "Atletico Madryt", "Espanyol", "Atletico Madrid",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.HOME,
+                "Atletico Madryt", "Atletico Madrid", "Getafe",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+    }
+
+    @Test
+    void exactAliasMustIdentifyExactlyOneFixtureParticipant() {
+        assertResolution(FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Argentyna", "Uruguay", "Brazil",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.AMBIGUOUS,
+                "Brazylia", "Brazil", "Brazil",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+    }
+
+    @Test
+    void preservesApprovedStrictInflections() {
+        assertResolution(FootballParticipantResolver.Resolution.HOME,
+                "Bolonii", "Bologna", "Torino",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        assertResolution(FootballParticipantResolver.Resolution.HOME,
+                "Podbeskidzia", "Podbeskidzie", "Wisla Krakow",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        for (String subject : List.of("Liverpoolu", "Arsenalu", "Bayernu", "Ruchu")) {
+            String team = subject.substring(0, subject.length() - 1);
+            assertResolution(FootballParticipantResolver.Resolution.HOME, subject, team, "Chelsea",
+                    FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET);
+        }
+    }
+
+    @Test
+    void sharedPrefixDoesNotCreateUnrelatedTeamAliases() {
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Milan",
+                "Milano",
+                "Torino",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Roma",
+                "Romania",
+                "Spain",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
+        assertResolution(
+                FootballParticipantResolver.Resolution.UNRESOLVED,
+                "Inter",
+                "Intel",
+                "Torino",
+                FootballParticipantResolver.MatchingPolicy.STRICT_SCORED_SUBSET
+        );
     }
 
     @Test

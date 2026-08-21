@@ -20,7 +20,7 @@ public final class FootballParticipantResolver {
             "lks", "ssa", "sv", "cp", "ac", "as", "club"
     );
     private static final Set<String> SIMPLE_INFLECTION_SUFFIXES = Set.of(
-            "u", "a", "em", "ie", "i", "y", "owi", "om", "ow", "ia"
+            "u", "a", "em", "ie", "i", "y", "owi", "om", "ow"
     );
     private static final Set<String> A_STEM_SUFFIXES = Set.of(
             "a", "y", "i", "ie", "ii", "e"
@@ -33,6 +33,15 @@ public final class FootballParticipantResolver {
             MatchingPolicy policy,
             Map<String, List<String>> aliases
     ) {
+        Resolution exact = resolveExactNormalized(subject, homeTeam, awayTeam);
+        if (exact != Resolution.UNRESOLVED) return exact;
+
+        String normalizedSubject = normalize(subject);
+        var aliasTarget = FootballParticipantAliasRegistry.canonicalTarget(normalizedSubject);
+        if (aliasTarget.isPresent()) {
+            return resolveExactNormalized(aliasTarget.get(), homeTeam, awayTeam);
+        }
+
         int homeScore = matchScore(subject, homeTeam, policy, aliases);
         int awayScore = matchScore(subject, awayTeam, policy, aliases);
 
@@ -40,6 +49,20 @@ public final class FootballParticipantResolver {
         if (homeScore == awayScore) return Resolution.AMBIGUOUS;
         if (homeScore > awayScore) return Resolution.HOME;
         if (awayScore > homeScore) return Resolution.AWAY;
+        return Resolution.UNRESOLVED;
+    }
+
+    private static Resolution resolveExactNormalized(
+            String subject,
+            String homeTeam,
+            String awayTeam
+    ) {
+        String normalizedSubject = normalize(subject);
+        boolean homeMatches = normalizedSubject.equals(normalize(homeTeam));
+        boolean awayMatches = normalizedSubject.equals(normalize(awayTeam));
+        if (homeMatches && awayMatches) return Resolution.AMBIGUOUS;
+        if (homeMatches) return Resolution.HOME;
+        if (awayMatches) return Resolution.AWAY;
         return Resolution.UNRESOLVED;
     }
 
@@ -142,36 +165,25 @@ public final class FootballParticipantResolver {
     private static boolean broadTokenEquivalent(String left, String right) {
         if (left.equals(right)) return true;
         if (left.length() < 4 || right.length() < 4) return false;
-        String localizedLeft = left.replace('y', 'i');
-        String localizedRight = right.replace('y', 'i');
-        if (localizedLeft.startsWith(localizedRight)
-                && localizedLeft.length() <= localizedRight.length() + 7) return true;
-        if (localizedRight.startsWith(localizedLeft)
-                && localizedRight.length() <= localizedLeft.length() + 7) return true;
-        if (localizedLeft.length() == localizedRight.length()
-                && localizedLeft.substring(0, localizedLeft.length() - 1)
-                .equals(localizedRight.substring(0, localizedRight.length() - 1))
-                && ((localizedLeft.endsWith("t") && localizedRight.endsWith("d"))
-                || (localizedLeft.endsWith("d") && localizedRight.endsWith("t")))) return true;
-        if (left.startsWith(right) && left.length() <= right.length() + 7) return true;
-        if (right.startsWith(left) && right.length() <= left.length() + 7) return true;
-        return sameStemWithoutFinalA(left, right)
-                || sameStemWithoutFinalA(right, left)
-                || samePolishInflectionStem(left, right);
+        // right is the API participant token; only derive a subject inflection from that base.
+        return tokenEquivalent(right, left) || safePolishInflection(right, left);
     }
 
-    private static boolean sameStemWithoutFinalA(String base, String inflected) {
-        if (!base.endsWith("a") || base.length() < 5) return false;
-        String stem = base.substring(0, base.length() - 1);
-        return inflected.startsWith(stem) && inflected.length() <= base.length() + 6;
-    }
+    private static boolean safePolishInflection(String teamToken, String subjectToken) {
+        String team = teamToken.replace("gn", "ni");
+        String subject = subjectToken.replace("gn", "ni");
+        if (team.length() < 5 || subject.length() < 5) return false;
 
-    private static boolean samePolishInflectionStem(String left, String right) {
-        String normalizedLeft = left.replace("gn", "ni");
-        String normalizedRight = right.replace("gn", "ni");
-        if (normalizedLeft.length() < 5 || normalizedRight.length() < 5) return false;
-        return normalizedLeft.substring(0, normalizedLeft.length() - 1)
-                .equals(normalizedRight.substring(0, normalizedRight.length() - 1));
+        if (team.endsWith("a")) {
+            String stem = team.substring(0, team.length() - 1);
+            if (subject.startsWith(stem)
+                    && A_STEM_SUFFIXES.contains(subject.substring(stem.length()))) return true;
+        }
+        if (team.endsWith("ie")) {
+            String stem = team.substring(0, team.length() - 2);
+            return subject.equals(stem + "ia");
+        }
+        return false;
     }
 
     private static List<String> teamVariants(
