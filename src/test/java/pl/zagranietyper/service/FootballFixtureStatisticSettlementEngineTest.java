@@ -63,6 +63,28 @@ final class FootballFixtureStatisticSettlementEngineTest {
         assertEquals(SettlementDecision.UNSUPPORTED, settle(match(Comparison.OVER, "1"), partial));
     }
 
+    @Test void shotsKnownZeroIsValidAndAbsentRemainsUnsupported() {
+        var shotsZero = snapshot(new FootballFixtureStatisticsSnapshot.StatisticValue(
+                10, FootballFixtureStatisticsSnapshot.TeamSide.HOME,
+                FootballFixtureStatisticType.SHOTS_TOTAL, BigDecimal.ZERO,
+                FootballFixtureStatisticsSnapshot.ValueStatus.KNOWN, "Total Shots"));
+        var totalCondition = FootballFixtureStatisticCondition.threshold(
+                FootballFixtureStatisticType.SHOTS_TOTAL,
+                FootballFixtureStatisticCondition.Subject.HOME,
+                FootballFixtureStatisticCondition.Comparison.OVER, new BigDecimal("0.5"));
+        assertEquals(SettlementDecision.L, settle(totalCondition, shotsZero));
+
+        var targetAbsent = snapshot(new FootballFixtureStatisticsSnapshot.StatisticValue(
+                20, FootballFixtureStatisticsSnapshot.TeamSide.AWAY,
+                FootballFixtureStatisticType.SHOTS_ON_TARGET, null,
+                FootballFixtureStatisticsSnapshot.ValueStatus.ABSENT, "Shots on Goal"));
+        var targetCondition = FootballFixtureStatisticCondition.threshold(
+                FootballFixtureStatisticType.SHOTS_ON_TARGET,
+                FootballFixtureStatisticCondition.Subject.AWAY,
+                FootballFixtureStatisticCondition.Comparison.UNDER, new BigDecimal("0.5"));
+        assertEquals(SettlementDecision.UNSUPPORTED, settle(targetCondition, targetAbsent));
+    }
+
     private SettlementDecision settle(FootballFixtureStatisticCondition condition,
                                       FootballFixtureStatisticsSnapshot snapshot) {
         return engine.settle(condition, snapshot);
