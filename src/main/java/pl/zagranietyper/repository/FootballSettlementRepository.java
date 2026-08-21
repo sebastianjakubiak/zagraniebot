@@ -50,7 +50,10 @@ public final class FootballSettlementRepository {
                     NULLIF(
                         f.raw_json #>> '{score,fulltime,away}',
                         ''
-                    )::integer AS ft_away
+                    )::integer AS ft_away,
+
+                    NULLIF(f.raw_json #>> '{score,halftime,home}', '')::integer AS ht_home,
+                    NULLIF(f.raw_json #>> '{score,halftime,away}', '')::integer AS ht_away
 
                 FROM bet_legs bl
 
@@ -128,6 +131,14 @@ public final class FootballSettlementRepository {
                                 nullableInteger(
                                         rs,
                                         "ft_away"
+                                ),
+                                nullableInteger(
+                                        rs,
+                                        "ht_home"
+                                ),
+                                nullableInteger(
+                                        rs,
+                                        "ht_away"
                                 )
                         )
                 );
@@ -719,7 +730,9 @@ public final class FootballSettlementRepository {
             String homeTeam,
             String awayTeam,
             Integer fulltimeHome,
-            Integer fulltimeAway
+            Integer fulltimeAway,
+            Integer halftimeHome,
+            Integer halftimeAway
     ) {
     }
 
