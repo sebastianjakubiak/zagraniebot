@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import pl.zagranietyper.config.ApiFootballConfig;
 import pl.zagranietyper.model.ApiFootballFixture;
 import pl.zagranietyper.model.ApiFootballFixtureStatisticsResponse;
+import pl.zagranietyper.model.ApiFootballFixtureEventsResponse;
 
 import java.io.IOException;
 import java.net.URI;
@@ -164,6 +165,21 @@ public final class ApiFootballClient {
                     null, e.getMessage(), null, fetchedAt, List.of());
         }
     }
+
+    /** Fetches the complete event feed for exactly one fixture. */
+    public ApiFootballFixtureEventsResponse fetchFixtureEvents(long fixtureId) {
+        if(fixtureId<=0)throw new IllegalArgumentException("fixtureId must be positive");
+        URI uri=URI.create(config.baseUrl()+"/fixtures/events?fixture="+fixtureId);
+        HttpRequest request=HttpRequest.newBuilder().uri(uri).timeout(Duration.ofSeconds(60)).header("x-apisports-key",config.apiKey()).header("Accept","application/json").header("User-Agent","ZagranieTyper/0.1").GET().build();
+        Instant fetchedAt=Instant.now();
+        try{HttpResponse<String>response=sendWithRetry(request,"fixture events="+fixtureId);if(response.statusCode()!=200)return new ApiFootballFixtureEventsResponse(fixtureId,ApiFootballFixtureEventsResponse.Status.FETCH_FAILED,response.statusCode(),"API-Football HTTP "+response.statusCode(),response.body(),fetchedAt,List.of());return parseFixtureEvents(response.body(),fixtureId,response.statusCode(),fetchedAt);}catch(RuntimeException e){return new ApiFootballFixtureEventsResponse(fixtureId,ApiFootballFixtureEventsResponse.Status.FETCH_FAILED,null,e.getMessage(),null,fetchedAt,List.of());}
+    }
+
+    ApiFootballFixtureEventsResponse parseFixtureEvents(String body,long fixtureId,Integer httpStatus,Instant fetchedAt){
+        try{JsonNode root=objectMapper.readTree(body);JsonNode errors=root.get("errors");if(hasErrors(errors))return new ApiFootballFixtureEventsResponse(fixtureId,ApiFootballFixtureEventsResponse.Status.API_ERROR,httpStatus,errors.toString(),body,fetchedAt,List.of());JsonNode response=root.get("response");if(response==null||!response.isArray())throw new IllegalArgumentException("response is not an array");if(response.isEmpty())return new ApiFootballFixtureEventsResponse(fixtureId,ApiFootballFixtureEventsResponse.Status.EMPTY,httpStatus,null,body,fetchedAt,List.of());List<ApiFootballFixtureEventsResponse.Event>events=new ArrayList<>();int index=0;for(JsonNode item:response){JsonNode time=item.path("time"),team=item.path("team"),player=item.path("player"),assist=item.path("assist");events.add(new ApiFootballFixtureEventsResponse.Event(index++,nullableLong(team,"id"),text(team,"name"),nullableLong(player,"id"),text(player,"name"),nullableLong(assist,"id"),text(assist,"name"),text(item,"type"),text(item,"detail"),nullableInt(time,"elapsed"),nullableInt(time,"extra"),text(item,"comments")));}return new ApiFootballFixtureEventsResponse(fixtureId,ApiFootballFixtureEventsResponse.Status.SUCCESS,httpStatus,null,body,fetchedAt,events);}catch(Exception e){return new ApiFootballFixtureEventsResponse(fixtureId,ApiFootballFixtureEventsResponse.Status.PARSE_ERROR,httpStatus,e.getMessage(),body,fetchedAt,List.of());}
+    }
+
+    private static Integer nullableInt(JsonNode node,String field){JsonNode value=node.get(field);return value!=null&&!value.isNull()&&value.canConvertToInt()?value.asInt():null;}
 
     ApiFootballFixtureStatisticsResponse parseFixtureStatistics(
             String body, long fixtureId, Integer httpStatus, Instant fetchedAt) {
