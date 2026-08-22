@@ -362,3 +362,10 @@ CREATE TABLE IF NOT EXISTS api_football_fixture_player_statistics (
     PRIMARY KEY(fixture_id,team_id,player_id)
 );
 CREATE INDEX IF NOT EXISTS idx_fixture_player_stats_player ON api_football_fixture_player_statistics(player_id);
+
+CREATE TABLE IF NOT EXISTS api_football_competition_progression_fetches(
+ league_id BIGINT NOT NULL,season INTEGER NOT NULL,status VARCHAR(32) NOT NULL,raw_json JSONB,error_message TEXT,fetched_at TIMESTAMPTZ NOT NULL,PRIMARY KEY(league_id,season)
+);
+CREATE TABLE IF NOT EXISTS api_football_competition_progression_fixtures(
+ league_id BIGINT NOT NULL,season INTEGER NOT NULL,fixture_id BIGINT NOT NULL,round TEXT,status_short TEXT,kickoff TEXT,home_team_id BIGINT,home_team_name TEXT,home_winner BOOLEAN,away_team_id BIGINT,away_team_name TEXT,away_winner BOOLEAN,goals_home INTEGER,goals_away INTEGER,ft_home INTEGER,ft_away INTEGER,et_home INTEGER,et_away INTEGER,pen_home INTEGER,pen_away INTEGER,PRIMARY KEY(league_id,season,fixture_id)
+);
