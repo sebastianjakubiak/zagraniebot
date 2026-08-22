@@ -1,0 +1,10 @@
+package pl.zagranietyper.parser;
+import java.text.Normalizer;import java.util.Locale;import java.util.regex.*;
+
+/** Whole-title adapter for deterministic team-first-goal markets. */
+public final class FootballTeamFirstGoalSyntaxAdapter {
+ private static final Pattern COLON=Pattern.compile("^(?:pierwszy gol|1[.] gol):?\\s+(.+)$");private static final Pattern FOR=Pattern.compile("^pierwszy gol dla (.+)$");private static final Pattern MATCH=Pattern.compile("^1[.] gol w meczu - (.+)$");
+ public ParseResult parse(String title,String home,String away){if(title==null||title.isBlank())return reject(Status.NOT_LIKE);String t=normalize(title);if(!(t.contains("pierwszy gol")||t.startsWith("1. gol")))return reject(Status.NOT_LIKE);if(t.contains("polow")||t.matches(".*\\b[0-9]+\\s*min.*")||t.contains(" i ")||t.contains("+")||t.contains(","))return reject(Status.UNSUPPORTED);Matcher m=FOR.matcher(t);if(!m.matches())m=MATCH.matcher(t);if(!m.matches())m=COLON.matcher(t);if(!m.matches())return reject(Status.UNSUPPORTED);String subject=m.group(1).trim();if(subject.equals("1"))return parsed(Side.HOME,subject);if(subject.equals("2"))return parsed(Side.AWAY,subject);return switch(FootballTeamMarketParser.resolveParticipant(subject,home,away)){case HOME->parsed(Side.HOME,subject);case AWAY->parsed(Side.AWAY,subject);default->reject(Status.PARTICIPANT_UNRESOLVED);};}
+ private static ParseResult parsed(Side s,String n){return new ParseResult(Status.PARSED,s,n);}private static ParseResult reject(Status s){return new ParseResult(s,null,null);}private static String normalize(String s){return Normalizer.normalize(s.replace('ł','l').replace('Ł','L'),Normalizer.Form.NFD).replaceAll("\\p{M}+","").toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}.:+,-]+"," ").replaceAll("\\s+"," ").trim();}
+ public enum Side{HOME,AWAY}public enum Status{PARSED,NOT_LIKE,PARTICIPANT_UNRESOLVED,UNSUPPORTED}public record ParseResult(Status status,Side side,String normalizedSubject){public boolean parsed(){return status==Status.PARSED;}}
+}
