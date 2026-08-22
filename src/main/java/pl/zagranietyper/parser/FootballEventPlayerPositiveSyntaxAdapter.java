@@ -1,0 +1,9 @@
+package pl.zagranietyper.parser;
+import pl.zagranietyper.service.FootballEventPlayerResolver;import java.util.regex.*;
+
+/** Whole-title parser for pure anytime-scorer and pure player-assist positive markets. */
+public final class FootballEventPlayerPositiveSyntaxAdapter {
+ private static final Pattern SCORE=Pattern.compile("^(.+?) strzeli (?:gola|bramke)(?: w meczu)?$");private static final Pattern WITH_GOAL=Pattern.compile("^(.+?) z golem$");private static final Pattern REVERSED=Pattern.compile("^strzeli gola (.+)$");private static final Pattern ASSIST=Pattern.compile("^(.+?) zaliczy asyste$");
+ public ParseResult parse(String title){String t=FootballEventPlayerResolver.normalize(title);if(!(t.contains("strzeli gola")||t.contains("strzeli bramke")||t.contains("z golem")||t.contains("asyst")))return reject(Status.NOT_LIKE);if(t.contains("pierwszy")||t.contains("1 gol")||t.contains("minut")||t.contains("polow")||t.contains(" lub ")||t.contains(" i ")||t.contains(" oraz ")||t.contains("+")||t.contains("/"))return reject(Status.UNSUPPORTED);Matcher m=SCORE.matcher(t);if(m.matches())return parsed(Family.ANYTIME_SCORER,m.group(1));m=WITH_GOAL.matcher(t);if(m.matches())return parsed(Family.ANYTIME_SCORER,m.group(1));m=REVERSED.matcher(t);if(m.matches())return parsed(Family.ANYTIME_SCORER,m.group(1));m=ASSIST.matcher(t);if(m.matches())return parsed(Family.PLAYER_ASSIST,m.group(1));return reject(Status.UNSUPPORTED);}
+ private static ParseResult parsed(Family f,String p){return new ParseResult(Status.PARSED,f,p);}private static ParseResult reject(Status s){return new ParseResult(s,null,null);}public enum Family{ANYTIME_SCORER,PLAYER_ASSIST}public enum Status{PARSED,NOT_LIKE,UNSUPPORTED}public record ParseResult(Status status,Family family,String playerLabel){public boolean parsed(){return status==Status.PARSED;}}
+}
