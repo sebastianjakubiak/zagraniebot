@@ -1,0 +1,2 @@
+package pl.zagranietyper.model;
+public record FootballTeamStatisticComparisonCondition(FootballFixtureStatisticType statisticType,FootballFixtureStatisticsSnapshot.TeamSide selectedSide,Relation relation){public enum Relation{MORE_THAN_OPPONENT,LESS_THAN_OPPONENT}}
