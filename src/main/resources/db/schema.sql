@@ -369,3 +369,46 @@ CREATE TABLE IF NOT EXISTS api_football_competition_progression_fetches(
 CREATE TABLE IF NOT EXISTS api_football_competition_progression_fixtures(
  league_id BIGINT NOT NULL,season INTEGER NOT NULL,fixture_id BIGINT NOT NULL,round TEXT,status_short TEXT,kickoff TEXT,home_team_id BIGINT,home_team_name TEXT,home_winner BOOLEAN,away_team_id BIGINT,away_team_name TEXT,away_winner BOOLEAN,goals_home INTEGER,goals_away INTEGER,ft_home INTEGER,ft_away INTEGER,et_home INTEGER,et_away INTEGER,pen_home INTEGER,pen_away INTEGER,PRIMARY KEY(league_id,season,fixture_id)
 );
+
+CREATE TABLE IF NOT EXISTS football_secondary_fixture_mappings(
+    fixture_id BIGINT NOT NULL REFERENCES api_football_fixtures(fixture_id) ON DELETE CASCADE,
+    provider VARCHAR(32) NOT NULL,
+    provider_event_id VARCHAR(64),
+    status VARCHAR(32) NOT NULL,
+    evidence TEXT,
+    mapped_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(fixture_id,provider),
+    CHECK(status IN('MAPPED','UNRESOLVED','AMBIGUOUS','FETCH_FAILED','API_ERROR','PARSE_ERROR'))
+);
+
+CREATE TABLE IF NOT EXISTS football_period_stat_fetches(
+    fixture_id BIGINT NOT NULL REFERENCES api_football_fixtures(fixture_id) ON DELETE CASCADE,
+    provider VARCHAR(32) NOT NULL,
+    provider_event_id VARCHAR(64),
+    status VARCHAR(32) NOT NULL,
+    error_message TEXT,
+    raw_json JSONB,
+    fetched_at TIMESTAMPTZ NOT NULL,
+    parser_version INTEGER NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(fixture_id,provider),
+    CHECK(status IN('COMPLETE','PARTIAL','UNAVAILABLE','UNSUPPORTED','FETCH_FAILED','API_ERROR','PARSE_ERROR'))
+);
+
+CREATE TABLE IF NOT EXISTS football_period_statistics(
+    fixture_id BIGINT NOT NULL REFERENCES api_football_fixtures(fixture_id) ON DELETE CASCADE,
+    provider VARCHAR(32) NOT NULL,
+    provider_event_id VARCHAR(64) NOT NULL,
+    period VARCHAR(24) NOT NULL,
+    statistic_type VARCHAR(40) NOT NULL,
+    team_side VARCHAR(8) NOT NULL,
+    value NUMERIC,
+    value_status VARCHAR(16) NOT NULL,
+    raw_key TEXT,
+    ingested_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY(fixture_id,provider,period,statistic_type,team_side),
+    CHECK(period IN('FIRST_HALF','SECOND_HALF','FULL_MATCH')),
+    CHECK(team_side IN('HOME','AWAY')),
+    CHECK(value_status IN('KNOWN','ABSENT','INVALID')),
+    CHECK((value_status='KNOWN' AND value IS NOT NULL AND value>=0) OR (value_status<>'KNOWN' AND value IS NULL))
+);
