@@ -307,3 +307,58 @@ ALTER TABLE import_runs
 
 ALTER TABLE import_runs
     ADD COLUMN IF NOT EXISTS legs_saved INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS api_football_fixture_player_stat_fetches (
+    fixture_id BIGINT PRIMARY KEY REFERENCES api_football_fixtures(fixture_id) ON DELETE CASCADE,
+    status VARCHAR(32) NOT NULL,
+    source VARCHAR(32) NOT NULL,
+    http_status INTEGER,
+    returned_player_count INTEGER NOT NULL DEFAULT 0,
+    error_message TEXT,
+    raw_json JSONB,
+    fetched_at TIMESTAMPTZ NOT NULL,
+    parser_version INTEGER NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK(status IN('COMPLETE','UNSUPPORTED_OR_EMPTY','FETCH_FAILED','API_ERROR','PARSE_ERROR'))
+);
+
+CREATE TABLE IF NOT EXISTS api_football_fixture_player_statistics (
+    fixture_id BIGINT NOT NULL REFERENCES api_football_fixtures(fixture_id) ON DELETE CASCADE,
+    team_id BIGINT NOT NULL,
+    team_name TEXT,
+    player_id BIGINT NOT NULL,
+    player_name TEXT,
+    minutes INTEGER,
+    position TEXT,
+    rating TEXT,
+    captain BOOLEAN,
+    substitute BOOLEAN,
+    offsides INTEGER,
+    shots_total INTEGER,
+    shots_on_target INTEGER,
+    goals INTEGER,
+    assists INTEGER,
+    saves INTEGER,
+    passes_total INTEGER,
+    passes_key INTEGER,
+    passes_accuracy TEXT,
+    tackles INTEGER,
+    blocks INTEGER,
+    interceptions INTEGER,
+    duels_total INTEGER,
+    duels_won INTEGER,
+    dribbles_attempts INTEGER,
+    dribbles_success INTEGER,
+    dribbles_past INTEGER,
+    fouls_drawn INTEGER,
+    fouls_committed INTEGER,
+    yellow_cards INTEGER,
+    red_cards INTEGER,
+    penalties JSONB,
+    raw_statistics JSONB NOT NULL,
+    source VARCHAR(32) NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL,
+    parser_version INTEGER NOT NULL,
+    PRIMARY KEY(fixture_id,team_id,player_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fixture_player_stats_player ON api_football_fixture_player_statistics(player_id);
