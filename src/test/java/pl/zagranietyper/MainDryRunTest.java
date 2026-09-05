@@ -23,8 +23,8 @@ class MainDryRunTest {
     }
 
     @Test
-    void liveSyncInitializesSchema() {
-        assertTrue(
+    void liveSyncDoesNotInitializeSchema() {
+        assertFalse(
                 Main.shouldInitializeSchema(
                         "sync-new-tips",
                         Map.of(
