@@ -65,6 +65,16 @@ public final class Main {
                         options
                 );
 
+        boolean readOnlyDryRun =
+                "sync-new-tips".equalsIgnoreCase(
+                        command
+                )
+                        && optionalBoolean(
+                        options,
+                        "dry-run",
+                        false
+                );
+
         AppConfig config =
                 AppConfig.fromEnvironment();
 
@@ -76,7 +86,11 @@ public final class Main {
                         config
                 );
 
-        database.initializeSchema();
+        if (
+                !readOnlyDryRun
+        ) {
+            database.initializeSchema();
+        }
 
         ZagranieClient client =
                 new ZagranieClient(
