@@ -129,6 +129,18 @@ export TELEGRAM_NOTIFY_BOOTSTRAP='false'
 
 Dry-run nigdy nie wysyła Telegrama, nawet jeśli `TELEGRAM_ENABLED=true`.
 
+Po ustawieniu tokena i chat/channel ID można sprawdzić połączenie bez dotykania DB:
+
+```bash
+java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar telegram-test
+```
+
+Powinno wysłać jedną techniczną wiadomość i zakończyć się:
+
+```text
+TELEGRAM_TEST=SUCCESS
+```
+
 Format wiadomości:
 
 ```text
