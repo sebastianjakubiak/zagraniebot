@@ -113,6 +113,7 @@ public final class Main {
 
             case "sync-new-tips" ->
                     runSyncNewTips(
+                            options,
                             config,
                             database,
                             objectMapper,
@@ -412,11 +413,19 @@ public final class Main {
     }
 
     private static void runSyncNewTips(
+            Map<String, String> options,
             AppConfig config,
             Database database,
             ObjectMapper objectMapper,
             ZagranieClient client
     ) {
+        boolean dryRun =
+                optionalBoolean(
+                        options,
+                        "dry-run",
+                        false
+                );
+
         ImportRepository importRepository =
                 new ImportRepository(
                         database,
@@ -450,12 +459,23 @@ public final class Main {
         );
 
         System.out.println(
+                "mode="
+                        + (
+                        dryRun
+                                ? "DRY_RUN"
+                                : "LIVE"
+                )
+        );
+
+        System.out.println(
                 "allowedAuthors="
                         + allowedAuthors.ids()
         );
 
         NewTipsPollingService.SyncResult result =
-                service.run();
+                service.run(
+                        dryRun
+                );
 
         System.out.println();
         System.out.println("DONE");
@@ -472,7 +492,11 @@ public final class Main {
                         + result.postsSeen()
         );
         System.out.println(
-                "postsProcessed="
+                (
+                        dryRun
+                                ? "postsWouldProcess="
+                                : "postsProcessed="
+                )
                         + result.postsProcessed()
         );
         System.out.println(
@@ -480,8 +504,21 @@ public final class Main {
                         + result.postsSkippedUnchanged()
         );
         System.out.println(
-                "newBets="
+                (
+                        dryRun
+                                ? "wouldCreateNewBets="
+                                : "newBets="
+                )
                         + result.newBets().size()
+        );
+
+        System.out.println(
+                "DATABASE_WRITES="
+                        + (
+                        dryRun
+                                ? 0
+                                : "ENABLED"
+                )
         );
 
         for (
@@ -493,7 +530,11 @@ public final class Main {
 
             System.out.println();
             System.out.println(
-                    "NEW BET"
+                    (
+                            dryRun
+                                    ? "WOULD CREATE BET"
+                                    : "NEW BET"
+                    )
                             + " | post="
                             + detectedBet.wpPostId()
                             + " | ordinal="
@@ -776,6 +817,46 @@ public final class Main {
         );
     }
 
+    private static boolean optionalBoolean(
+            Map<String, String> options,
+            String key,
+            boolean defaultValue
+    ) {
+        String value =
+                options.get(
+                        key
+                );
+
+        if (
+                value == null
+                        || value.isBlank()
+        ) {
+            return defaultValue;
+        }
+
+        if (
+                "true".equalsIgnoreCase(
+                        value
+                )
+        ) {
+            return true;
+        }
+
+        if (
+                "false".equalsIgnoreCase(
+                        value
+                )
+        ) {
+            return false;
+        }
+
+        throw new IllegalArgumentException(
+                "Opcja --"
+                        + key
+                        + " musi mieć wartość true albo false"
+        );
+    }
+
     private static List<Long> requiredLongList(
             Map<String, String> options,
             String key
@@ -851,6 +932,10 @@ public final class Main {
                     --author-id=8560 \\
                     --author-name="Patryk Domagala" \\
                     --days=730
+
+                Bezpieczny dry-run live syncu, bez zapisów do DB:
+                  java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips \
+                    --dry-run=true
 
                 Jednorazowy live sync nowych/zmodyfikowanych typów z whitelisty:
                   java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
