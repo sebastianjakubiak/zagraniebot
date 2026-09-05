@@ -1,5 +1,8 @@
 package pl.zagranietyper.config;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 public record AppConfig(
         String dbUrl,
         String dbUser,
@@ -34,6 +37,78 @@ public record AppConfig(
 
     private static long envLong(String key, long defaultValue) {
         return Long.parseLong(env(key, Long.toString(defaultValue)));
+    }
+
+    public Set<Long> allowedAuthorIds() {
+        return envLongSet(
+                "ZAGRANIE_ALLOWED_AUTHOR_IDS",
+                "8033"
+        );
+    }
+
+    public long pollBootstrapLookbackHours() {
+        return envLong(
+                "ZAGRANIE_POLL_BOOTSTRAP_LOOKBACK_HOURS",
+                720L
+        );
+    }
+
+    public long pollOverlapSeconds() {
+        return envLong(
+                "ZAGRANIE_POLL_OVERLAP_SECONDS",
+                120L
+        );
+    }
+
+    private static Set<Long> envLongSet(
+            String key,
+            String defaultValue
+    ) {
+        String raw =
+                env(
+                        key,
+                        defaultValue
+                );
+
+        LinkedHashSet<Long> result =
+                new LinkedHashSet<>();
+
+        for (
+                String part :
+                raw.split(",")
+        ) {
+            String value =
+                    part.trim();
+
+            if (
+                    value.isEmpty()
+            ) {
+                continue;
+            }
+
+            long id =
+                    Long.parseLong(
+                            value
+                    );
+
+            if (
+                    id <= 0
+            ) {
+                throw new IllegalArgumentException(
+                        key
+                                + " zawiera niepoprawne ID autora: "
+                                + value
+                );
+            }
+
+            result.add(
+                    id
+            );
+        }
+
+        return Set.copyOf(
+                result
+        );
     }
 
     private static String trimTrailingSlash(String value) {
