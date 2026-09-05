@@ -36,6 +36,7 @@ public final class FootballManualReviewClassifier {
         return new Result(family, blocker);
     }
     public static String normalize(String s) { return s==null?"":s.toLowerCase(Locale.ROOT).replace('ł','l').replace('ą','a').replace('ę','e').replace('ż','z').replace('ź','z').replace('ś','s').replace('ć','c').replace('ń','n').replaceAll("\\s+"," ").trim(); }
-    public static String fingerprint(Candidate c) throws Exception { String s=c.legId()+"|"+c.betId()+"|"+c.tipTitle()+"|PENDING|NONE"; return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8))); }
+    public static String fingerprint(Candidate c) throws Exception { return fingerprint(c.legId(),c.betId(),c.tipTitle()); }
+    public static String fingerprint(long legId,long betId,String title) throws Exception { String s=legId+"|"+betId+"|"+title+"|PENDING|NONE"; return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8))); }
     public record Result(String family,String blocker) {}
 }
