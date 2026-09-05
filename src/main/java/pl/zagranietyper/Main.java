@@ -65,14 +65,10 @@ public final class Main {
                         options
                 );
 
-        boolean readOnlyDryRun =
-                "sync-new-tips".equalsIgnoreCase(
-                        command
-                )
-                        && optionalBoolean(
-                        options,
-                        "dry-run",
-                        false
+        boolean initializeSchema =
+                shouldInitializeSchema(
+                        command,
+                        options
                 );
 
         AppConfig config =
@@ -87,7 +83,7 @@ public final class Main {
                 );
 
         if (
-                !readOnlyDryRun
+                initializeSchema
         ) {
             database.initializeSchema();
         }
@@ -828,6 +824,22 @@ public final class Main {
 
         return Long.parseLong(
                 value
+        );
+    }
+
+    static boolean shouldInitializeSchema(
+            String command,
+            Map<String, String> options
+    ) {
+        return !(
+                "sync-new-tips".equalsIgnoreCase(
+                        command
+                )
+                        && optionalBoolean(
+                        options,
+                        "dry-run",
+                        false
+                )
         );
     }
 
