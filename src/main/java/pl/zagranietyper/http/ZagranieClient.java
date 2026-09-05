@@ -247,6 +247,174 @@ public final class ZagranieClient {
     }
 
     /*
+     * Lekki indeks WordPressa po dacie modyfikacji.
+     * Używany przez live polling.
+     */
+    public WpPostPage fetchModifiedPostsPage(
+            long authorId,
+            Instant modifiedAfter,
+            Instant modifiedBefore,
+            int page
+    ) {
+        Map<String, String> query =
+                new LinkedHashMap<>();
+
+        query.put(
+                "page",
+                Integer.toString(
+                        page
+                )
+        );
+
+        query.put(
+                "per_page",
+                Integer.toString(
+                        INDEX_PER_PAGE
+                )
+        );
+
+        query.put(
+                "author",
+                Long.toString(
+                        authorId
+                )
+        );
+
+        query.put(
+                "modified_after",
+                WP_DATE.format(
+                        modifiedAfter.atOffset(
+                                ZoneOffset.UTC
+                        )
+                )
+        );
+
+        query.put(
+                "modified_before",
+                WP_DATE.format(
+                        modifiedBefore.atOffset(
+                                ZoneOffset.UTC
+                        )
+                )
+        );
+
+        query.put(
+                "orderby",
+                "modified"
+        );
+
+        query.put(
+                "order",
+                "asc"
+        );
+
+        query.put(
+                "_fields",
+                "id,author,link,slug,date,date_gmt,"
+                        + "modified,modified_gmt,title"
+        );
+
+        URI uri =
+                URI.create(
+                        config.baseUrl()
+                                + config.wpPostsPath()
+                                + "?"
+                                + encodeQuery(
+                                query
+                        )
+                );
+
+        LOG.info(
+                "WP MODIFIED INDEX GET: author="
+                        + authorId
+                        + ", page="
+                        + page
+                        + ", from="
+                        + modifiedAfter
+                        + ", to="
+                        + modifiedBefore
+        );
+
+        HttpResponse<String> response =
+                getWithRetry(
+                        uri
+                );
+
+        String body =
+                response.body();
+
+        if (
+                body == null
+                        || body.isBlank()
+        ) {
+            throw new IllegalStateException(
+                    "WordPress zwrócił pustą odpowiedź indeksową po modified."
+                            + " status="
+                            + response.statusCode()
+                            + ", uri="
+                            + uri
+            );
+        }
+
+        try {
+            List<WpPost> posts =
+                    objectMapper.readValue(
+                            body,
+                            new TypeReference<>() {
+                            }
+                    );
+
+            int totalPages =
+                    response.headers()
+                            .firstValue(
+                                    "X-WP-TotalPages"
+                            )
+                            .map(
+                                    Integer::parseInt
+                            )
+                            .orElse(
+                                    posts.size()
+                                            < INDEX_PER_PAGE
+                                            ? page
+                                            : page + 1
+                            );
+
+            int totalPosts =
+                    response.headers()
+                            .firstValue(
+                                    "X-WP-Total"
+                            )
+                            .map(
+                                    Integer::parseInt
+                            )
+                            .orElse(
+                                    -1
+                            );
+
+            return new WpPostPage(
+                    posts,
+                    page,
+                    totalPages,
+                    totalPosts
+            );
+
+        } catch (
+                IOException e
+        ) {
+            throw new IllegalStateException(
+                    "Nie udało się zdekodować indeksu WordPress po modified dla "
+                            + uri
+                            + ". Początek body: "
+                            + abbreviate(
+                            body,
+                            500
+                    ),
+                    e
+            );
+        }
+    }
+
+    /*
      * Lekki metadata GET dla pojedynczego posta.
      *
      * Używane m.in. przez repair-posts:
