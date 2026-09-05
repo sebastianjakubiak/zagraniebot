@@ -927,20 +927,14 @@ public final class Main {
                 "telegram-test".equalsIgnoreCase(
                         command
                 )
+                        || "sync-new-tips".equalsIgnoreCase(
+                        command
+                )
         ) {
             return false;
         }
 
-        return !(
-                "sync-new-tips".equalsIgnoreCase(
-                        command
-                )
-                        && optionalBoolean(
-                        options,
-                        "dry-run",
-                        false
-                )
-        );
+        return true;
     }
 
     private static boolean optionalBoolean(
