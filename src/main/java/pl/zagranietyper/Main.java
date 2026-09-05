@@ -459,6 +459,9 @@ public final class Main {
                         Duration.ofHours(
                                 config.pollBootstrapLookbackHours()
                         ),
+                        Duration.ofHours(
+                                config.pollRecentScanHours()
+                        ),
                         Duration.ofSeconds(
                                 config.pollOverlapSeconds()
                         )
