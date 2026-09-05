@@ -11,10 +11,13 @@ import pl.zagranietyper.repository.AuthorRepository;
 import pl.zagranietyper.repository.Database;
 import pl.zagranietyper.repository.ImportRepository;
 import pl.zagranietyper.service.AllAuthorsBackfillService;
+import pl.zagranietyper.service.AllowedAuthors;
 import pl.zagranietyper.service.AuthorDiscoveryService;
 import pl.zagranietyper.service.HistoricalBackfillService;
+import pl.zagranietyper.service.NewTipsPollingService;
 import pl.zagranietyper.service.RepairPostsService;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -103,6 +106,14 @@ public final class Main {
             case "backfill-all" ->
                     runBackfillAll(
                             dateRange,
+                            database,
+                            objectMapper,
+                            client
+                    );
+
+            case "sync-new-tips" ->
+                    runSyncNewTips(
+                            config,
                             database,
                             objectMapper,
                             client
@@ -397,6 +408,121 @@ public final class Main {
                             + " | legs="
                             + author.legsSaved()
             );
+        }
+    }
+
+    private static void runSyncNewTips(
+            AppConfig config,
+            Database database,
+            ObjectMapper objectMapper,
+            ZagranieClient client
+    ) {
+        ImportRepository importRepository =
+                new ImportRepository(
+                        database,
+                        objectMapper
+                );
+
+        ZagraniePostParser parser =
+                new ZagraniePostParser();
+
+        AllowedAuthors allowedAuthors =
+                new AllowedAuthors(
+                        config.allowedAuthorIds()
+                );
+
+        NewTipsPollingService service =
+                new NewTipsPollingService(
+                        client,
+                        parser,
+                        importRepository,
+                        allowedAuthors,
+                        Duration.ofHours(
+                                config.pollBootstrapLookbackHours()
+                        ),
+                        Duration.ofSeconds(
+                                config.pollOverlapSeconds()
+                        )
+                );
+
+        System.out.println(
+                "Zagranie Typer — sync new tips"
+        );
+
+        System.out.println(
+                "allowedAuthors="
+                        + allowedAuthors.ids()
+        );
+
+        NewTipsPollingService.SyncResult result =
+                service.run();
+
+        System.out.println();
+        System.out.println("DONE");
+        System.out.println(
+                "authors="
+                        + result.authorsScanned()
+        );
+        System.out.println(
+                "pages="
+                        + result.pagesFetched()
+        );
+        System.out.println(
+                "postsSeen="
+                        + result.postsSeen()
+        );
+        System.out.println(
+                "postsProcessed="
+                        + result.postsProcessed()
+        );
+        System.out.println(
+                "postsSkippedUnchanged="
+                        + result.postsSkippedUnchanged()
+        );
+        System.out.println(
+                "newBets="
+                        + result.newBets().size()
+        );
+
+        for (
+                NewTipsPollingService.DetectedBet detectedBet :
+                result.newBets()
+        ) {
+            var bet =
+                    detectedBet.bet();
+
+            System.out.println();
+            System.out.println(
+                    "NEW BET"
+                            + " | post="
+                            + detectedBet.wpPostId()
+                            + " | ordinal="
+                            + bet.ordinal()
+                            + " | type="
+                            + bet.type()
+                            + " | odds="
+                            + bet.displayedOdds()
+                            + " | "
+                            + detectedBet.articleTitle()
+            );
+
+            System.out.println(
+                    detectedBet.articleUrl()
+            );
+
+            for (
+                    var leg :
+                    bet.legs()
+            ) {
+                System.out.println(
+                        "  - "
+                                + leg.tipTitle()
+                                + " @"
+                                + leg.tipOdds()
+                                + " | operator="
+                                + leg.operator()
+                );
+            }
         }
     }
 
@@ -725,6 +851,9 @@ public final class Main {
                     --author-id=8560 \\
                     --author-name="Patryk Domagala" \\
                     --days=730
+
+                Jednorazowy live sync nowych/zmodyfikowanych typów z whitelisty:
+                  java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
 
                 Naprawa konkretnych postów bez pełnego backfillu:
                   java -cp target/zagranie-typer-0.1.0-SNAPSHOT.jar \\
