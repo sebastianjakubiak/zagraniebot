@@ -31,6 +31,40 @@ public record AppConfig(
         return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
+    private static boolean envBoolean(
+            String key,
+            boolean defaultValue
+    ) {
+        String value =
+                env(
+                        key,
+                        Boolean.toString(
+                                defaultValue
+                        )
+                );
+
+        if (
+                "true".equalsIgnoreCase(
+                        value
+                )
+        ) {
+            return true;
+        }
+
+        if (
+                "false".equalsIgnoreCase(
+                        value
+                )
+        ) {
+            return false;
+        }
+
+        throw new IllegalArgumentException(
+                key
+                        + " musi mieć wartość true albo false"
+        );
+    }
+
     private static int envInt(String key, int defaultValue) {
         return Integer.parseInt(env(key, Integer.toString(defaultValue)));
     }
@@ -57,6 +91,34 @@ public record AppConfig(
         return envLong(
                 "ZAGRANIE_POLL_RECENT_SCAN_HOURS",
                 72L
+        );
+    }
+
+    public boolean telegramEnabled() {
+        return envBoolean(
+                "TELEGRAM_ENABLED",
+                false
+        );
+    }
+
+    public String telegramBotToken() {
+        return env(
+                "TELEGRAM_BOT_TOKEN",
+                ""
+        );
+    }
+
+    public String telegramChatId() {
+        return env(
+                "TELEGRAM_CHAT_ID",
+                ""
+        );
+    }
+
+    public String telegramTipsterName() {
+        return env(
+                "TELEGRAM_TIPSTER_NAME",
+                "Mateusz Domański"
         );
     }
 
