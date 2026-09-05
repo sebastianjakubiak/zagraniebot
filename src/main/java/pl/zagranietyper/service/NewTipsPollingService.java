@@ -30,6 +30,7 @@ public final class NewTipsPollingService {
     private final ImportRepository repository;
     private final AllowedAuthors allowedAuthors;
     private final Duration bootstrapLookback;
+    private final Duration recentScanLookback;
     private final Duration overlap;
     private final Clock clock;
 
@@ -39,6 +40,7 @@ public final class NewTipsPollingService {
             ImportRepository repository,
             AllowedAuthors allowedAuthors,
             Duration bootstrapLookback,
+            Duration recentScanLookback,
             Duration overlap
     ) {
         this(
@@ -47,6 +49,7 @@ public final class NewTipsPollingService {
                 repository,
                 allowedAuthors,
                 bootstrapLookback,
+                recentScanLookback,
                 overlap,
                 Clock.systemUTC()
         );
@@ -58,6 +61,7 @@ public final class NewTipsPollingService {
             ImportRepository repository,
             AllowedAuthors allowedAuthors,
             Duration bootstrapLookback,
+            Duration recentScanLookback,
             Duration overlap,
             Clock clock
     ) {
@@ -66,6 +70,7 @@ public final class NewTipsPollingService {
         this.repository = repository;
         this.allowedAuthors = allowedAuthors;
         this.bootstrapLookback = bootstrapLookback;
+        this.recentScanLookback = recentScanLookback;
         this.overlap = overlap;
         this.clock = clock;
 
@@ -85,6 +90,16 @@ public final class NewTipsPollingService {
         ) {
             throw new IllegalArgumentException(
                     "bootstrapLookback musi być > 0"
+            );
+        }
+
+        if (
+                recentScanLookback == null
+                        || recentScanLookback.isNegative()
+                        || recentScanLookback.isZero()
+        ) {
+            throw new IllegalArgumentException(
+                    "recentScanLookback musi być > 0"
             );
         }
 
@@ -133,22 +148,17 @@ public final class NewTipsPollingService {
             authorsScanned++;
 
             Instant fromInclusive =
-                    repository
-                            .findLatestModifiedAt(
+                    computePublishedScanFrom(
+                            repository.findLatestModifiedAt(
                                     authorId
-                            )
-                            .map(
-                                    latest ->
-                                            latest.minus(
-                                                    overlap
-                                            )
-                            )
-                            .orElseGet(
-                                    () ->
-                                            now.minus(
-                                                    bootstrapLookback
-                                            )
-                            );
+                            ).orElse(
+                                    null
+                            ),
+                            now,
+                            bootstrapLookback,
+                            recentScanLookback,
+                            overlap
+                    );
 
             LOG.info(
                     "LIVE SYNC AUTHOR"
@@ -169,8 +179,7 @@ public final class NewTipsPollingService {
                     true
             ) {
                 WpPostPage wpPage =
-                        client.fetchModifiedPostsPage(
-                                authorId,
+                        client.fetchPostsPage(
                                 fromInclusive,
                                 toExclusive,
                                 page
@@ -205,16 +214,6 @@ public final class NewTipsPollingService {
                                     wpPost.author()
                             )
                     ) {
-                        LOG.warning(
-                                "Pomijam post spoza whitelisty"
-                                        + " | post="
-                                        + wpPost.id()
-                                        + " | expectedAuthor="
-                                        + authorId
-                                        + " | actualAuthor="
-                                        + wpPost.author()
-                        );
-
                         continue;
                     }
 
@@ -350,6 +349,38 @@ public final class NewTipsPollingService {
                         newBets
                 )
         );
+    }
+
+    static Instant computePublishedScanFrom(
+            Instant latestStoredModifiedAt,
+            Instant now,
+            Duration bootstrapLookback,
+            Duration recentScanLookback,
+            Duration overlap
+    ) {
+        Instant recentWindowFrom =
+                now.minus(
+                        recentScanLookback
+                );
+
+        if (
+                latestStoredModifiedAt == null
+        ) {
+            return now.minus(
+                    bootstrapLookback
+            );
+        }
+
+        Instant catchupFrom =
+                latestStoredModifiedAt.minus(
+                        overlap
+                );
+
+        return catchupFrom.isBefore(
+                recentWindowFrom
+        )
+                ? catchupFrom
+                : recentWindowFrom;
     }
 
     static boolean shouldProcess(
