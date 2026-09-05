@@ -54,3 +54,36 @@ java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar backfill \
   --from=2024-08-13 \
   --to=2026-08-13
 ```
+
+
+## Live polling nowych typów
+
+Domyślna whitelista zawiera tylko Mateusza Domańskiego:
+
+```bash
+export ZAGRANIE_ALLOWED_AUTHOR_IDS='8033'
+```
+
+Kolejnych autorów można dodać bez zmiany kodu:
+
+```bash
+export ZAGRANIE_ALLOWED_AUTHOR_IDS='8033,52'
+```
+
+Jednorazowy, idempotentny sync:
+
+```bash
+java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
+```
+
+Poller odpytuje WordPress po `modified_at`, używa overlapu przy wznowieniu
+i ponownie przetwarza post tylko wtedy, gdy WordPress ma nowszą wersję.
+Komenda jest celowo jednorazowa, żeby na Lenovo odpalać ją cyklicznie
+przez `systemd timer` albo cron.
+
+Opcjonalna konfiguracja:
+
+```bash
+export ZAGRANIE_POLL_BOOTSTRAP_LOOKBACK_HOURS='720'
+export ZAGRANIE_POLL_OVERLAP_SECONDS='120'
+```
