@@ -106,3 +106,57 @@ export ZAGRANIE_POLL_BOOTSTRAP_LOOKBACK_HOURS='720'
 export ZAGRANIE_POLL_RECENT_SCAN_HOURS='72'
 export ZAGRANIE_POLL_OVERLAP_SECONDS='120'
 ```
+
+
+### Telegram
+
+Powiadomienia są domyślnie wyłączone. Na Lenovo użyj tego samego tokena bota
+i tego samego `chat_id`/kanału co działający ZT bot:
+
+```bash
+export TELEGRAM_ENABLED='true'
+export TELEGRAM_BOT_TOKEN='...ten sam token co ZT bot...'
+export TELEGRAM_CHAT_ID='...ten sam chat/channel id co ZT bot...'
+export TELEGRAM_TIPSTER_NAME='Mateusz Domański'
+```
+
+Na świeżej bazie historyczny bootstrap nie wysyła wiadomości, żeby nie zasypać
+kanału starymi typami:
+
+```bash
+export TELEGRAM_NOTIFY_BOOTSTRAP='false'
+```
+
+Dry-run nigdy nie wysyła Telegrama, nawet jeśli `TELEGRAM_ENABLED=true`.
+
+Format wiadomości:
+
+```text
+🔥 NOWY TYP — Mateusz Domański
+
+Korona – Wisła Kraków: Typy i kursy
+SINGLE @1.6
+• Obie drużyny strzelą gole @1.6 — sts
+
+https://zagranie.com/...
+```
+
+### Lenovo / systemd
+
+Gotowe pliki są w `deploy/systemd/`:
+
+- `zagranie-domanski-poller.service` — jednorazowy live sync,
+- `zagranie-domanski-poller.timer` — uruchomienie co 60 sekund,
+- `zagraniebot.env.example` — wzór env bez sekretów.
+
+Domyślne ścieżki w unitach:
+
+```text
+/opt/zagraniebot
+/etc/zagraniebot/zagraniebot.env
+```
+
+Unit zakłada użytkownika systemowego `zagraniebot`. Jeżeli istniejący ZT bot
+na Lenovo działa pod innym użytkownikiem albo z innych ścieżek, przy wdrożeniu
+wyrównaj `User`, `Group`, `WorkingDirectory`, `EnvironmentFile` i `ExecStart`
+do istniejącej konfiguracji zamiast tworzyć drugi zestaw sekretów.
