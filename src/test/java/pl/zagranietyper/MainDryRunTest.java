@@ -44,4 +44,14 @@ class MainDryRunTest {
                 )
         );
     }
+    @Test
+    void telegramTestDoesNotInitializeSchema() {
+        assertFalse(
+                Main.shouldInitializeSchema(
+                        "telegram-test",
+                        Map.of()
+                )
+        );
+    }
+
 }
