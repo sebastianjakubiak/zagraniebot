@@ -133,6 +133,12 @@ public final class Main {
                             client
                     );
 
+            case "telegram-test" ->
+                    runTelegramTest(
+                            config,
+                            objectMapper
+                    );
+
             case "repair-posts" ->
                     runRepairPosts(
                             options,
@@ -641,6 +647,28 @@ public final class Main {
         }
     }
 
+    private static void runTelegramTest(
+            AppConfig config,
+            ObjectMapper objectMapper
+    ) {
+        TelegramNotifier notifier =
+                new TelegramNotifier(
+                        config.telegramBotToken(),
+                        config.telegramChatId(),
+                        objectMapper,
+                        config.httpTimeoutSeconds()
+                );
+
+        notifier.send(
+                "✅ ZagranieBot — Telegram działa. "
+                        + "Poller Domańskiego jest gotowy do wysyłki."
+        );
+
+        System.out.println(
+                "TELEGRAM_TEST=SUCCESS"
+        );
+    }
+
     private static void runRepairPosts(
             Map<String, String> options,
             Database database,
@@ -895,6 +923,14 @@ public final class Main {
             String command,
             Map<String, String> options
     ) {
+        if (
+                "telegram-test".equalsIgnoreCase(
+                        command
+                )
+        ) {
+            return false;
+        }
+
         return !(
                 "sync-new-tips".equalsIgnoreCase(
                         command
@@ -1029,6 +1065,9 @@ public final class Main {
 
                 Jednorazowy live sync nowych/zmodyfikowanych typów z whitelisty:
                   java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
+
+                Test konfiguracji Telegrama (bez DB):
+                  java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar telegram-test
 
                 Naprawa konkretnych postów bez pełnego backfillu:
                   java -cp target/zagranie-typer-0.1.0-SNAPSHOT.jar \\
