@@ -91,8 +91,11 @@ Jednorazowy, idempotentny live sync:
 java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
 ```
 
-Poller odpytuje WordPress po `modified_at`, używa overlapu przy wznowieniu
-i ponownie przetwarza post tylko wtedy, gdy WordPress ma nowszą wersję.
+Zagranie.com zwraca 404 dla REST query po `modified_after`, dlatego live sync
+używa wspieranego lekkiego indeksu po dacie publikacji, filtruje autora lokalnie
+i porównuje `modified_at` każdego kandydata z bazą. Przy normalnej pracy zawsze
+ponownie skanuje ostatnie 72 godziny publikacji, żeby wychwycić edycje świeżych
+artykułów. Po dłuższej przerwie nadrabia od ostatniego `modified_at` w DB.
 Komenda jest celowo jednorazowa, żeby na Lenovo odpalać ją cyklicznie
 przez `systemd timer` albo cron.
 
@@ -100,5 +103,6 @@ Opcjonalna konfiguracja:
 
 ```bash
 export ZAGRANIE_POLL_BOOTSTRAP_LOOKBACK_HOURS='720'
+export ZAGRANIE_POLL_RECENT_SCAN_HOURS='72'
 export ZAGRANIE_POLL_OVERLAP_SECONDS='120'
 ```
