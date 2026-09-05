@@ -122,6 +122,13 @@ public record AppConfig(
         );
     }
 
+    public boolean telegramNotifyBootstrap() {
+        return envBoolean(
+                "TELEGRAM_NOTIFY_BOOTSTRAP",
+                false
+        );
+    }
+
     public long pollOverlapSeconds() {
         return envLong(
                 "ZAGRANIE_POLL_OVERLAP_SECONDS",
