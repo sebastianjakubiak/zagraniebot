@@ -218,6 +218,64 @@ public final class ImportRepository {
         }
     }
 
+    public List<Integer> findNewBetOrdinals(
+            ParsedPost post
+    ) {
+        if (
+                post.bets() == null
+                        || post.bets().isEmpty()
+        ) {
+            return List.of();
+        }
+
+        try (
+                Connection connection =
+                        database.openConnection()
+        ) {
+            connection.setReadOnly(
+                    true
+            );
+
+            connection.setAutoCommit(
+                    false
+            );
+
+            try {
+                List<ExistingBet> existingBets =
+                        loadExistingBets(
+                                connection,
+                                post.wpPostId()
+                        );
+
+                List<Integer> result =
+                        findNewBetOrdinals(
+                                post,
+                                existingBets
+                        );
+
+                connection.rollback();
+
+                return result;
+
+            } catch (
+                    SQLException
+                    | RuntimeException e
+            ) {
+                connection.rollback();
+                throw e;
+            }
+
+        } catch (
+                SQLException e
+        ) {
+            throw new IllegalStateException(
+                    "Nie udało się wykonać dry-run dla posta "
+                            + post.wpPostId(),
+                    e
+            );
+        }
+    }
+
     public void savePostMetadata(
             ParsedPost post
     ) {
@@ -1224,6 +1282,64 @@ public final class ImportRepository {
 
             ps.executeUpdate();
         }
+    }
+
+    private static List<Integer> findNewBetOrdinals(
+            ParsedPost post,
+            List<ExistingBet> existingBets
+    ) {
+        Map<String, Deque<ExistingBet>> betsBySemanticKey =
+                new HashMap<>();
+
+        for (
+                ExistingBet existingBet :
+                existingBets
+        ) {
+            betsBySemanticKey
+                    .computeIfAbsent(
+                            existingBet.semanticKey(),
+                            ignored ->
+                                    new ArrayDeque<>()
+                    )
+                    .addLast(
+                            existingBet
+                    );
+        }
+
+        List<Integer> result =
+                new ArrayList<>();
+
+        for (
+                ParsedBet parsedBet :
+                post.bets()
+        ) {
+            String semanticKey =
+                    IngestIdentity.betKey(
+                            parsedBet
+                    );
+
+            Deque<ExistingBet> candidates =
+                    betsBySemanticKey.get(
+                            semanticKey
+                    );
+
+            ExistingBet existingBet =
+                    candidates == null
+                            ? null
+                            : candidates.pollFirst();
+
+            if (
+                    existingBet == null
+            ) {
+                result.add(
+                        parsedBet.ordinal()
+                );
+            }
+        }
+
+        return List.copyOf(
+                result
+        );
     }
 
     private void acquirePostLock(
