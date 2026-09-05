@@ -99,6 +99,14 @@ public final class NewTipsPollingService {
     }
 
     public SyncResult run() {
+        return run(
+                false
+        );
+    }
+
+    public SyncResult run(
+            boolean dryRun
+    ) {
         Instant now =
                 clock.instant();
 
@@ -243,25 +251,49 @@ public final class NewTipsPollingService {
                                     html
                             );
 
-                    repository.ensureAuthorExists(
-                            wpPost.author()
-                    );
+                    if (
+                            !dryRun
+                    ) {
+                        repository.ensureAuthorExists(
+                                wpPost.author()
+                        );
+                    }
 
                     if (
                             parsedPost.bets().isEmpty()
                     ) {
-                        repository.savePostMetadata(
-                                parsedPost
-                        );
+                        if (
+                                !dryRun
+                        ) {
+                            repository.savePostMetadata(
+                                    parsedPost
+                            );
+                        }
 
                         postsProcessed++;
                         continue;
                     }
 
-                    ImportRepository.LiveSaveResult saved =
-                            repository.savePostWithBetsPreservingIdentity(
-                                    parsedPost
-                            );
+                    ImportRepository.LiveSaveResult saved;
+
+                    if (
+                            dryRun
+                    ) {
+                        saved =
+                                new ImportRepository.LiveSaveResult(
+                                        0,
+                                        0,
+                                        repository.findNewBetOrdinals(
+                                                parsedPost
+                                        )
+                                );
+
+                    } else {
+                        saved =
+                                repository.savePostWithBetsPreservingIdentity(
+                                        parsedPost
+                                );
+                    }
 
                     postsProcessed++;
                     betsSaved +=
