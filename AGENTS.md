@@ -17,7 +17,7 @@ Stack:
 - Never write to the production/database settlement state unless explicitly instructed.
 - Never run settlement APPLY automatically.
 - Never run destructive SQL.
-- Never commit or push automatically.
+- Do not commit or push unless the user explicitly asks you to. When the user explicitly asks for repository implementation with commits or pushes, committing and pushing the approved branch is allowed.
 - Never modify data just because a parser appears correct.
 - Ambiguous betting-market semantics must remain unresolved until explicitly approved by the user.
 - Do not infer bookmaker nomenclature when it is uncertain.
