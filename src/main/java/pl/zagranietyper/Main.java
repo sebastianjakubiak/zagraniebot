@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import pl.zagranietyper.config.AppConfig;
 import pl.zagranietyper.http.ZagranieClient;
 import pl.zagranietyper.model.DiscoveredAuthor;
+import pl.zagranietyper.notification.TelegramNotifier;
+import pl.zagranietyper.notification.TelegramTipMessageFormatter;
 import pl.zagranietyper.parser.AuthorIdentityParser;
 import pl.zagranietyper.parser.EditorialTipDetector;
 import pl.zagranietyper.parser.ZagraniePostParser;
@@ -534,6 +536,29 @@ public final class Main {
                 )
         );
 
+        boolean telegramEnabled =
+                config.telegramEnabled()
+                        && !dryRun;
+
+        System.out.println(
+                "TELEGRAM="
+                        + (
+                        telegramEnabled
+                                ? "ENABLED"
+                                : "DISABLED"
+                )
+        );
+
+        TelegramNotifier telegramNotifier =
+                telegramEnabled
+                        ? new TelegramNotifier(
+                                config.telegramBotToken(),
+                                config.telegramChatId(),
+                                objectMapper,
+                                config.httpTimeoutSeconds()
+                        )
+                        : null;
+
         for (
                 NewTipsPollingService.DetectedBet detectedBet :
                 result.newBets()
@@ -575,6 +600,17 @@ public final class Main {
                                 + leg.tipOdds()
                                 + " | operator="
                                 + leg.operator()
+                );
+            }
+
+            if (
+                    telegramNotifier != null
+            ) {
+                telegramNotifier.send(
+                        TelegramTipMessageFormatter.format(
+                                config.telegramTipsterName(),
+                                detectedBet
+                        )
                 );
             }
         }
