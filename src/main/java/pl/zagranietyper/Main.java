@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import pl.zagranietyper.config.AppConfig;
 import pl.zagranietyper.http.ZagranieClient;
 import pl.zagranietyper.model.DiscoveredAuthor;
+import pl.zagranietyper.notification.TelegramNotificationPolicy;
 import pl.zagranietyper.notification.TelegramNotifier;
 import pl.zagranietyper.notification.TelegramTipMessageFormatter;
 import pl.zagranietyper.parser.AuthorIdentityParser;
@@ -536,21 +537,24 @@ public final class Main {
                 )
         );
 
-        boolean telegramEnabled =
-                config.telegramEnabled()
+        boolean telegramConfigured =
+                config.telegramEnabled();
+
+        boolean telegramActive =
+                telegramConfigured
                         && !dryRun;
 
         System.out.println(
                 "TELEGRAM="
                         + (
-                        telegramEnabled
+                        telegramActive
                                 ? "ENABLED"
                                 : "DISABLED"
                 )
         );
 
         TelegramNotifier telegramNotifier =
-                telegramEnabled
+                telegramActive
                         ? new TelegramNotifier(
                                 config.telegramBotToken(),
                                 config.telegramChatId(),
@@ -603,12 +607,17 @@ public final class Main {
                 );
             }
 
+            boolean sendTelegram =
+                    TelegramNotificationPolicy.shouldSend(
+                            telegramConfigured,
+                            dryRun,
+                            detectedBet.bootstrap(),
+                            config.telegramNotifyBootstrap()
+                    );
+
             if (
-                    telegramNotifier != null
-                            && (
-                            !detectedBet.bootstrap()
-                                    || config.telegramNotifyBootstrap()
-                    )
+                    sendTelegram
+                            && telegramNotifier != null
             ) {
                 telegramNotifier.send(
                         TelegramTipMessageFormatter.format(
@@ -618,7 +627,7 @@ public final class Main {
                 );
 
             } else if (
-                    telegramNotifier != null
+                    telegramActive
                             && detectedBet.bootstrap()
             ) {
                 System.out.println(
