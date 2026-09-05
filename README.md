@@ -168,7 +168,20 @@ Domyślne ścieżki w unitach:
 /etc/zagraniebot/zagraniebot.env
 ```
 
-Unit zakłada użytkownika systemowego `zagraniebot`. Jeżeli istniejący ZT bot
-na Lenovo działa pod innym użytkownikiem albo z innych ścieżek, przy wdrożeniu
-wyrównaj `User`, `Group`, `WorkingDirectory`, `EnvironmentFile` i `ExecStart`
-do istniejącej konfiguracji zamiast tworzyć drugi zestaw sekretów.
+Unit jest dopasowany do aktualnego Lenovo:
+
+- działa jako użytkownik `boob92`, tak jak `zt-bot.service`,
+- używa `flock` i kodu 75, tak jak `zawodtyper-v2-daily.service`,
+- loguje do journald,
+- pracuje z `/opt/zagraniebot`,
+- czyta sekrety z `/etc/zagraniebot/zagraniebot.env`,
+- timer uruchamia sync co 60 sekund.
+
+Baza pollera na Lenovo działa na PostgreSQL 17 / porcie 5433, więc env powinien
+zawierać m.in.:
+
+```text
+DB_URL=jdbc:postgresql://127.0.0.1:5433/zagranie_typer
+DB_USER=zagraniebot
+DB_PASSWORD=...
+```
