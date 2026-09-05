@@ -605,12 +605,28 @@ public final class Main {
 
             if (
                     telegramNotifier != null
+                            && (
+                            !detectedBet.bootstrap()
+                                    || config.telegramNotifyBootstrap()
+                    )
             ) {
                 telegramNotifier.send(
                         TelegramTipMessageFormatter.format(
                                 config.telegramTipsterName(),
                                 detectedBet
                         )
+                );
+
+            } else if (
+                    telegramNotifier != null
+                            && detectedBet.bootstrap()
+            ) {
+                System.out.println(
+                        "TELEGRAM SKIP BOOTSTRAP"
+                                + " | post="
+                                + detectedBet.wpPostId()
+                                + " | ordinal="
+                                + bet.ordinal()
                 );
             }
         }
