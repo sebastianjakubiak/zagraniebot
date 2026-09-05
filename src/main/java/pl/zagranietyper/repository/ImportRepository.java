@@ -244,7 +244,8 @@ public final class ImportRepository {
                 List<ExistingBet> existingBets =
                         loadExistingBets(
                                 connection,
-                                post.wpPostId()
+                                post.wpPostId(),
+                                false
                         );
 
                 List<Integer> result =
@@ -1365,7 +1366,20 @@ public final class ImportRepository {
             Connection connection,
             long wpPostId
     ) throws SQLException {
-        String sql = """
+        return loadExistingBets(
+                connection,
+                wpPostId,
+                true
+        );
+    }
+
+    private List<ExistingBet> loadExistingBets(
+            Connection connection,
+            long wpPostId,
+            boolean lockForUpdate
+    ) throws SQLException {
+        String sql =
+                """
                 SELECT
                     id,
                     source_fingerprint,
@@ -1373,8 +1387,12 @@ public final class ImportRepository {
                 FROM bets
                 WHERE wp_post_id = ?
                 ORDER BY active DESC, ordinal, id
-                FOR UPDATE
-                """;
+                """
+                        + (
+                        lockForUpdate
+                                ? " FOR UPDATE"
+                                : ""
+                );
 
         List<ExistingBet> result =
                 new ArrayList<>();
@@ -1403,7 +1421,8 @@ public final class ImportRepository {
                     List<ExistingLeg> legs =
                             loadExistingLegs(
                                     connection,
-                                    betId
+                                    betId,
+                                    lockForUpdate
                             );
 
                     String semanticKey =
@@ -1438,9 +1457,11 @@ public final class ImportRepository {
 
     private List<ExistingLeg> loadExistingLegs(
             Connection connection,
-            long betId
+            long betId,
+            boolean lockForUpdate
     ) throws SQLException {
-        String sql = """
+        String sql =
+                """
                 SELECT
                     source_fingerprint,
                     operator,
@@ -1453,8 +1474,12 @@ public final class ImportRepository {
                 FROM bet_legs
                 WHERE bet_id = ?
                 ORDER BY active DESC, ordinal, id
-                FOR UPDATE
-                """;
+                """
+                        + (
+                        lockForUpdate
+                                ? " FOR UPDATE"
+                                : ""
+                );
 
         List<ExistingLeg> result =
                 new ArrayList<>();
