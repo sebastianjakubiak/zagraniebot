@@ -147,11 +147,17 @@ public final class NewTipsPollingService {
         ) {
             authorsScanned++;
 
+            Optional<Instant> latestStoredModifiedAt =
+                    repository.findLatestModifiedAt(
+                            authorId
+                    );
+
+            boolean bootstrapRun =
+                    latestStoredModifiedAt.isEmpty();
+
             Instant fromInclusive =
                     computePublishedScanFrom(
-                            repository.findLatestModifiedAt(
-                                    authorId
-                            ).orElse(
+                            latestStoredModifiedAt.orElse(
                                     null
                             ),
                             now,
@@ -319,7 +325,8 @@ public final class NewTipsPollingService {
                                             parsedPost.wpPostId(),
                                             parsedPost.url(),
                                             parsedPost.title(),
-                                            bet
+                                            bet,
+                                            bootstrapRun
                                     )
                             );
                         }
@@ -435,7 +442,8 @@ public final class NewTipsPollingService {
             long wpPostId,
             String articleUrl,
             String articleTitle,
-            ParsedBet bet
+            ParsedBet bet,
+            boolean bootstrap
     ) {
     }
 
