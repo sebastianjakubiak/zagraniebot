@@ -53,6 +53,13 @@ public record AppConfig(
         );
     }
 
+    public long pollRecentScanHours() {
+        return envLong(
+                "ZAGRANIE_POLL_RECENT_SCAN_HOURS",
+                72L
+        );
+    }
+
     public long pollOverlapSeconds() {
         return envLong(
                 "ZAGRANIE_POLL_OVERLAP_SECONDS",
