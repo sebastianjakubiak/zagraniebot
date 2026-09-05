@@ -70,7 +70,22 @@ Kolejnych autorów można dodać bez zmiany kodu:
 export ZAGRANIE_ALLOWED_AUTHOR_IDS='8033,52'
 ```
 
-Jednorazowy, idempotentny sync:
+Bezpieczny dry-run. Pobiera i parsuje kandydatów, porównuje ich z aktualną bazą,
+ale nie wykonuje żadnych zapisów:
+
+```bash
+java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips \
+  --dry-run=true
+```
+
+W poprawnym dry-runie podsumowanie kończy się:
+
+```text
+mode=DRY_RUN
+DATABASE_WRITES=0
+```
+
+Jednorazowy, idempotentny live sync:
 
 ```bash
 java -jar target/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
