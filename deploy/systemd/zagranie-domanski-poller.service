@@ -1,0 +1,23 @@
+[Unit]
+Description=ZagranieBot Domański tip poller
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=zagraniebot
+Group=zagraniebot
+WorkingDirectory=/opt/zagraniebot
+EnvironmentFile=/etc/zagraniebot/zagraniebot.env
+ExecStart=/usr/bin/java -jar /opt/zagraniebot/zagranie-typer-0.1.0-SNAPSHOT.jar sync-new-tips
+TimeoutStartSec=5min
+
+# Keep the process filesystem access narrow.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/zagraniebot
+
+[Install]
+WantedBy=multi-user.target
